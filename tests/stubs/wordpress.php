@@ -17,10 +17,34 @@ final class WPStubs
     /** @var array<string, callable> */
     public static $filters = [];
 
+    /** @var bool */
+    public static $isAdmin = false;
+
+    /** @var bool */
+    public static $isMultisite = false;
+
+    /** @var int */
+    public static $blogId = 1;
+
+    /** @var string */
+    public static $stylesheet = '';
+
+    /** @var bool */
+    public static $userLoggedIn = false;
+
+    /** @var bool */
+    public static $usingExtObjectCache = false;
+
     public static function reset(): void
     {
-        self::$options = [];
-        self::$filters = [];
+        self::$options             = [];
+        self::$filters             = [];
+        self::$isAdmin             = false;
+        self::$isMultisite         = false;
+        self::$blogId              = 1;
+        self::$stylesheet          = '';
+        self::$userLoggedIn        = false;
+        self::$usingExtObjectCache = false;
     }
 }
 
@@ -102,5 +126,47 @@ if (!function_exists('sanitize_text_field')) {
     function sanitize_text_field(string $value): string
     {
         return trim(strip_tags($value));
+    }
+}
+
+if (!function_exists('is_admin')) {
+    function is_admin(): bool
+    {
+        return WPStubs::$isAdmin;
+    }
+}
+
+if (!function_exists('is_multisite')) {
+    function is_multisite(): bool
+    {
+        return WPStubs::$isMultisite;
+    }
+}
+
+if (!function_exists('get_current_blog_id')) {
+    function get_current_blog_id(): int
+    {
+        return WPStubs::$blogId;
+    }
+}
+
+if (!function_exists('get_stylesheet')) {
+    function get_stylesheet(): string
+    {
+        return WPStubs::$stylesheet;
+    }
+}
+
+if (!function_exists('is_user_logged_in')) {
+    function is_user_logged_in(): bool
+    {
+        return WPStubs::$userLoggedIn;
+    }
+}
+
+if (!function_exists('wp_using_ext_object_cache')) {
+    function wp_using_ext_object_cache(): bool
+    {
+        return WPStubs::$usingExtObjectCache;
     }
 }

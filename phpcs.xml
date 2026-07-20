@@ -28,6 +28,15 @@
     <arg value="sp"/>
     <arg name="parallel" value="8"/>
 
+    <!--
+        Errors block the build; warnings are reported but do not. The remaining warnings are
+        accepted and documented in place: WordPress entry points are side-effecting by design,
+        the debug logger writes directly rather than through WP_Filesystem (unavailable that
+        early, and too heavy for a debug log), and a few doc lines exceed 120 characters.
+        Warnings stay visible so a new one is noticed rather than hidden.
+    -->
+    <config name="ignore_warnings_on_exit" value="1"/>
+
     <!-- Formatting. -->
     <rule ref="PSR12"/>
 
@@ -90,5 +99,24 @@
     </rule>
     <rule ref="PSR1.Classes.ClassDeclaration.MissingNamespace">
         <exclude-pattern>/tests/stubs/*</exclude-pattern>
+    </rule>
+
+    <!--
+        CapitalPDangit rewrites the string "wordpress" to "WordPress" and phpcbf applies it
+        automatically. In test fixtures that silently corrupts expected values and environment
+        variable data. It rewrote an APP_NAME fixture and broke a passing test. Branding is not
+        worth silently editing test data for.
+    -->
+    <rule ref="WordPress.WP.CapitalPDangit">
+        <exclude-pattern>/tests/*</exclude-pattern>
+    </rule>
+
+    <!--
+        Setting $GLOBALS['wp_version'], $GLOBALS['wpdb'] and $GLOBALS['wp_object_cache'] is how
+        the context fixtures are built. The sniff is correct for plugin code, which must never
+        clobber core globals, and that rule remains enforced outside tests/.
+    -->
+    <rule ref="WordPress.WP.GlobalVariablesOverride">
+        <exclude-pattern>/tests/*</exclude-pattern>
     </rule>
 </ruleset>

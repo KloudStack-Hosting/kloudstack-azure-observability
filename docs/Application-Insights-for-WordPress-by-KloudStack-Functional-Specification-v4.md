@@ -58,7 +58,31 @@ The plugin will not refuse to run off-Azure — that would be hostile and unenfo
 Azure environment detection gates the enrichment features, the documentation states Azure as a
 requirement, and support is limited to Azure deployments.
 
-### 1.2 Distribution
+### 1.2 Strategic position — the first KloudStack tool
+
+Confirmed 20 July 2026: this plugin is not a one-off. It is the first component of a **KloudStack
+tools** line — capability that ships inside the KloudStack WordPress image, is also published
+publicly, and is useful on its own to people who are not KloudStack customers.
+
+That has concrete design consequences, which is why it belongs in the specification rather than
+in a strategy document:
+
+- **The plugin must be genuinely useful with no KloudStack account.** Nothing may be gated behind
+  the platform, and it must never phone home. A tool that is a funnel disguised as a tool gets
+  found out, and on WordPress.org it gets reported.
+- **Managed behaviour is additive, not preferential.** The MU-loader and `KLOUDSTACK_OBS_MANAGED`
+  change how configuration is delivered, never what telemetry is collected or how well it works.
+- **Naming and namespacing must generalise.** `KloudStack\Observability` and the `kloudstack_obs_`
+  prefix are scoped to observability, not to this plugin, so a second tool can sit beside it
+  without a rename.
+- **The shared conventions are worth standardising once**: the `Guard` fail-closed pattern, the
+  diagnostics self-test shape, the settings-page precedence display and the release pipeline are
+  all reusable across future tools rather than specific to this one.
+
+Candidate future tools are out of scope here. The requirement this section imposes is narrow:
+nothing in this plugin may assume KloudStack.
+
+### 1.3 Distribution
 
 One codebase, three delivery paths:
 
