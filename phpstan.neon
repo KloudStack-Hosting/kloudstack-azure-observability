@@ -12,4 +12,6 @@ parameters:
         - src/Client/assets/*
     bootstrapFiles:
         - tests/phpstan-bootstrap.php
+    scanFiles:
+        - tests/phpstan-stubs.php
     treatPhpDocTypesAsCertain: false

@@ -35,6 +35,9 @@ final class WPStubs
     /** @var bool */
     public static $usingExtObjectCache = false;
 
+    /** @var array<string, mixed> */
+    public static $transients = [];
+
     public static function reset(): void
     {
         self::$options             = [];
@@ -45,6 +48,7 @@ final class WPStubs
         self::$stylesheet          = '';
         self::$userLoggedIn        = false;
         self::$usingExtObjectCache = false;
+        self::$transients          = [];
     }
 }
 
@@ -168,5 +172,36 @@ if (!function_exists('wp_using_ext_object_cache')) {
     function wp_using_ext_object_cache(): bool
     {
         return WPStubs::$usingExtObjectCache;
+    }
+}
+
+if (!function_exists('get_transient')) {
+    /**
+     * @return mixed
+     */
+    function get_transient(string $transient)
+    {
+        return WPStubs::$transients[$transient] ?? false;
+    }
+}
+
+if (!function_exists('set_transient')) {
+    /**
+     * @param mixed $value
+     */
+    function set_transient(string $transient, $value, int $expiration = 0): bool
+    {
+        WPStubs::$transients[$transient] = $value;
+
+        return true;
+    }
+}
+
+if (!function_exists('delete_transient')) {
+    function delete_transient(string $transient): bool
+    {
+        unset(WPStubs::$transients[$transient]);
+
+        return true;
     }
 }
