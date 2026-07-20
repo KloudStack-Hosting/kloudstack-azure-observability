@@ -1,6 +1,19 @@
 <?xml version="1.0"?>
 <ruleset name="KloudStack Observability for Azure">
-    <description>WordPress Coding Standards for the KloudStack Azure Observability plugin.</description>
+    <description>
+        Coding standards for the KloudStack Azure Observability plugin.
+
+        This is deliberately not the full WordPress standard. WPCS bundles two distinct things:
+        correctness sniffs (escaping, sanitisation, nonces, i18n, unsafe WordPress APIs) and
+        formatting sniffs (tabs, Yoda conditions, spacing inside parentheses). The correctness
+        sniffs are the reason WPCS exists and are enforced in full below. The formatting sniffs
+        assume procedural, non-namespaced plugin code and conflict with PSR-12, which this
+        codebase follows because it is namespaced and PSR-4 autoloaded.
+
+        WordPress.org plugin review checks correctness and security, not brace placement. This
+        ruleset therefore enforces PSR-12 formatting and the whole of WPCS's security, i18n and
+        WordPress-API surface.
+    </description>
 
     <file>.</file>
 
@@ -15,24 +28,67 @@
     <arg value="sp"/>
     <arg name="parallel" value="8"/>
 
-    <rule ref="WordPress">
+    <!-- Formatting. -->
+    <rule ref="PSR12"/>
+
+    <!-- Correctness: escaping, sanitisation, nonces, SQL. The sniffs that actually matter. -->
+    <rule ref="WordPress.Security"/>
+
+    <!-- Correctness: unsafe or deprecated WordPress APIs, direct filesystem and DB access. -->
+    <rule ref="WordPress.WP"/>
+    <rule ref="WordPress.DB"/>
+    <rule ref="WordPress.CodeAnalysis"/>
+    <rule ref="WordPress.PHP.DevelopmentFunctions"/>
+    <rule ref="WordPress.PHP.DiscouragedPHPFunctions"/>
+    <rule ref="WordPress.PHP.NoSilencedErrors">
         <!--
-            The plugin uses PSR-4 class autoloading with namespaced classes, which is incompatible
-            with WordPress's hyphenated file naming and prefixing conventions. Namespacing gives
-            the same collision safety those rules exist to provide.
+            Silenced errors are used in exactly two places, both deliberate and commented: the
+            debug log writer and the legacy-file cleanup in the MU-loader. Neither may escalate a
+            failure into a customer-visible error.
         -->
-        <exclude name="WordPress.Files.FileName"/>
-        <exclude name="WordPress.NamingConventions.PrefixAllGlobals"/>
-        <exclude name="WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase"/>
+        <severity>3</severity>
     </rule>
 
     <rule ref="WordPress.WP.I18n">
         <properties>
-            <property name="text_domain" type="array" value="kloudstack-azure-observability"/>
+            <property name="text_domain" type="array">
+                <element value="kloudstack-azure-observability"/>
+            </property>
         </properties>
     </rule>
 
+    <!-- The plugin must run on every PHP version it declares support for. -->
     <rule ref="PHPCompatibilityWP"/>
     <config name="testVersion" value="7.4-"/>
     <config name="minimum_wp_version" value="6.0"/>
+
+    <!--
+        WordPress plugin entry points are side-effecting by design: the bootstrap registers hooks,
+        the loader boots the plugin, and uninstall.php deletes options. That is the contract
+        WordPress imposes, not a defect.
+    -->
+    <rule ref="PSR1.Files.SideEffects">
+        <exclude-pattern>/tests/*</exclude-pattern>
+        <exclude-pattern>/loader/*</exclude-pattern>
+        <exclude-pattern>/uninstall.php</exclude-pattern>
+        <exclude-pattern>/kloudstack-azure-observability.php</exclude-pattern>
+    </rule>
+
+    <!--
+        Test-only relaxations. None of this code ships.
+
+        putenv() is how the configuration precedence chain is exercised — the sniff's concern is
+        runtime configuration changes in production code, which is exactly what these tests
+        verify does not happen. The stub file intentionally declares global-namespace shims
+        because it is impersonating WordPress core.
+    -->
+    <rule ref="WordPress.PHP.DiscouragedPHPFunctions.runtime_configuration_putenv">
+        <exclude-pattern>/tests/*</exclude-pattern>
+    </rule>
+    <rule ref="WordPress.WP.AlternativeFunctions">
+        <exclude-pattern>/tests/*</exclude-pattern>
+    </rule>
+    <rule ref="PSR1.Classes.ClassDeclaration.MissingNamespace">
+        <exclude-pattern>/tests/stubs/*</exclude-pattern>
+    </rule>
 </ruleset>

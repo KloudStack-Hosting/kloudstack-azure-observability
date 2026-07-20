@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Uninstall handler.
  *
@@ -30,13 +31,13 @@ $kloudstack_obs_options = array(
     'kloudstack_obs_schema_version',
 );
 
-foreach ( $kloudstack_obs_options as $kloudstack_obs_option ) {
-    delete_option( $kloudstack_obs_option );
+foreach ($kloudstack_obs_options as $kloudstack_obs_option) {
+    delete_option($kloudstack_obs_option);
 
-    if ( is_multisite() ) {
-        delete_site_option( $kloudstack_obs_option );
+    if (is_multisite()) {
+        delete_site_option($kloudstack_obs_option);
     }
 }
 
-delete_transient( 'kloudstack_obs_breaker' );
-delete_transient( 'kloudstack_obs_diagnostics' );
+delete_transient('kloudstack_obs_breaker');
+delete_transient('kloudstack_obs_diagnostics');

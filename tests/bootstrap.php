@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * Unit test bootstrap.
  *
@@ -11,6 +9,8 @@ declare(strict_types=1);
  *
  * Anything that genuinely needs WordPress belongs in tests/integration, which runs under wp-env.
  */
+
+declare(strict_types=1);
 
 define('ABSPATH', __DIR__ . '/');
 

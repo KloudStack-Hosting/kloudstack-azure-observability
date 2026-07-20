@@ -87,7 +87,7 @@ final class Config
      */
     public function isManaged(): bool
     {
-        return defined('KLOUDSTACK_OBS_MANAGED') && KLOUDSTACK_OBS_MANAGED;
+        return defined('KLOUDSTACK_OBS_MANAGED') && (bool) constant('KLOUDSTACK_OBS_MANAGED');
     }
 
     /**
@@ -271,10 +271,14 @@ final class Config
             return trim($value);
         }
 
-        if (isset($_SERVER[$name]) && is_string($_SERVER[$name]) && $_SERVER[$name] !== '') {
-            return trim($_SERVER[$name]);
+        if (!isset($_SERVER[$name]) || !is_string($_SERVER[$name])) {
+            return '';
         }
 
-        return '';
+        // WordPress slash-escapes superglobals, so unslash before use. Sanitising is belt and
+        // braces: the value is structurally validated by the caller — the instrumentation key
+        // must be a GUID and the ingestion endpoint must be https — which is a stronger
+        // guarantee than escaping alone.
+        return trim(sanitize_text_field(wp_unslash($_SERVER[$name])));
     }
 }

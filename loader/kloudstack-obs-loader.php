@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Plugin Name: KloudStack Observability Loader
  * Description: Loads KloudStack Observability for Azure at MU priority on KloudStack managed stacks.
@@ -36,7 +37,14 @@ defined('ABSPATH') || exit;
     $legacy = WPMU_PLUGIN_DIR . '/kloudstack-appinsights.php';
 
     if (file_exists($legacy)) {
-        @unlink($legacy);
+        // wp_delete_file() is unavailable this early on some configurations; fall back to unlink.
+        // Failure is deliberately silent — a read-only filesystem must not break the site, and
+        // the diagnostics self-test reports the duplicate if removal did not succeed.
+        if (function_exists('wp_delete_file')) {
+            wp_delete_file($legacy);
+        } else {
+            @unlink($legacy); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+        }
     }
 
     // Tell the bootstrap not to self-register on plugins_loaded; we boot it directly below.

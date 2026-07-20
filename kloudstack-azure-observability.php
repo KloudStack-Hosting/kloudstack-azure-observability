@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Plugin Name:       KloudStack Observability for Azure
  * Plugin URI:        https://kloudstack.com/plugins/azure-observability/

@@ -85,3 +85,22 @@ if (!function_exists('wp_json_encode')) {
         return json_encode($data, $flags);
     }
 }
+
+if (!function_exists('wp_unslash')) {
+    /**
+     * @param mixed $value
+     *
+     * @return mixed
+     */
+    function wp_unslash($value)
+    {
+        return is_string($value) ? stripslashes($value) : $value;
+    }
+}
+
+if (!function_exists('sanitize_text_field')) {
+    function sanitize_text_field(string $value): string
+    {
+        return trim(strip_tags($value));
+    }
+}
