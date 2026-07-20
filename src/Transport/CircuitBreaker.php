@@ -27,7 +27,8 @@ final class CircuitBreaker
     public const STATE_OPEN      = 'open';
     public const STATE_HALF_OPEN = 'half-open';
 
-    private const TRANSIENT       = 'kloudstack_obs_breaker';
+    public const TRANSIENT = 'kloudstack_obs_breaker';
+
     private const FAILURE_THRESHOLD = 3;
     private const OPEN_SECONDS      = 300;
 
@@ -37,10 +38,23 @@ final class CircuitBreaker
     /** @var int */
     private $openSeconds;
 
-    public function __construct(int $threshold = self::FAILURE_THRESHOLD, int $openSeconds = self::OPEN_SECONDS)
-    {
+    /** @var string */
+    private $key;
+
+    /**
+     * @param string $key Transient key. Overridden by the diagnostics self-test so that a failed
+     *                    test cannot pollute production breaker state — sharing the key would
+     *                    mean running the self-test against an unreachable endpoint counted
+     *                    towards suspending the site's real telemetry.
+     */
+    public function __construct(
+        int $threshold = self::FAILURE_THRESHOLD,
+        int $openSeconds = self::OPEN_SECONDS,
+        string $key = self::TRANSIENT
+    ) {
         $this->threshold   = max(1, $threshold);
         $this->openSeconds = max(1, $openSeconds);
+        $this->key         = $key !== '' ? $key : self::TRANSIENT;
     }
 
     /**
@@ -88,7 +102,7 @@ final class CircuitBreaker
     public function recordSuccess(): void
     {
         if ($this->stored() !== null) {
-            delete_transient(self::TRANSIENT);
+            delete_transient($this->key);
         }
     }
 
@@ -101,7 +115,7 @@ final class CircuitBreaker
         $failures = (int) ($stored['failures'] ?? 0) + 1;
 
         set_transient(
-            self::TRANSIENT,
+            $this->key,
             [
                 'failures' => $failures,
                 'reason'   => $reason,
@@ -138,7 +152,7 @@ final class CircuitBreaker
 
     public function reset(): void
     {
-        delete_transient(self::TRANSIENT);
+        delete_transient($this->key);
     }
 
     /**
@@ -146,7 +160,7 @@ final class CircuitBreaker
      */
     private function stored(): ?array
     {
-        $stored = get_transient(self::TRANSIENT);
+        $stored = get_transient($this->key);
 
         return is_array($stored) ? $stored : null;
     }

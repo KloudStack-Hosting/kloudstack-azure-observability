@@ -22,12 +22,40 @@ image into a standalone, publicly distributed plugin.
 - `Log` debug logging, gated behind `WP_DEBUG` and an explicit filter.
 - CI: lint matrix (PHP 7.4–8.4), PHPCS, PHPStan level 6, PHPUnit, version-consistency check.
 
+### Added — Phase B (telemetry core)
+- `Envelope` — Application Insights wire format, tick-precision durations, dimension coercion.
+- `AzureContext` — App Service / Container Apps / AKS / VM detection, cloud role and slot naming.
+- `WordPressContext` — schema v1 custom dimensions.
+- `Correlation` — W3C trace context, inbound `traceparent` adoption, route-template operation names.
+- `Privacy` — IP anonymisation, query-string allowlist with an unconditional credential blocklist,
+  header-capture opt-in, consent filter.
+- `Sampler` and `Buffer` — trace-consistent sampling and a bounded per-request buffer.
+
+### Added — Phase C (transport)
+- `ResponseRelease` — releases the response before transmission via `fastcgi_finish_request()`,
+  LiteSpeed's equivalent, or a flush fallback.
+- `CircuitBreaker` — transient-backed, shared across workers, so an Azure outage cannot exhaust
+  the PHP-FPM worker pool.
+- `Transport` — single batched request per page, gzip above 1KB, failure classification that
+  distinguishes an unreachable endpoint from a rejected payload.
+
+### Added — Phase D (collectors)
+- `Settings` — typed, filterable configuration access.
+- `Reporter` — assembles telemetry, owns sampling and context tags, releases before transmitting.
+- `RequestCollector` — request telemetry with exclusions for cron, heartbeat and xmlrpc.
+- `ExceptionCollector` — uncaught Throwables and fatals, chaining the previous handler.
+- `SnippetInjector` — JS SDK with a telemetry initializer that correlates browser to server.
+
+### Added — Phase E (administration)
+- Settings screen under Tools, with environment-locked fields shown read-only and their source named.
+- Diagnostics self-test: ten checks including a live round-trip to Azure through the production
+  transport path.
+- Site Health integration and debug-information export.
+
 ### Pending
-- Phase B — telemetry core: envelope, Azure and WordPress context, correlation, privacy, sampling, buffer.
-- Phase C — non-blocking transport, batching, circuit breaker, latency benchmark gate.
-- Phase D — request, exception and error collectors; JS SDK injection with correlation.
-- Phase E — settings page, diagnostics self-test, Site Health.
-- Phase F — readme, i18n, uninstall, release workflow, image integration.
+- Phase F — i18n, release workflow, image integration, WordPress.org submission.
+- Integration testing inside a real WordPress install.
+- C4 latency benchmark against App Service — a hard release gate.
 
 ## 1.2.3 and earlier
 

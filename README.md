@@ -2,7 +2,7 @@
 
 Azure Application Insights telemetry for WordPress running on Azure.
 
-[![CI](https://github.com/kloudstack/kloudstack-azure-observability/actions/workflows/ci.yml/badge.svg)](https://github.com/kloudstack/kloudstack-azure-observability/actions/workflows/ci.yml)
+[![CI](https://github.com/KloudStack-Hosting/kloudstack-azure-observability/actions/workflows/ci.yml/badge.svg)](https://github.com/KloudStack-Hosting/kloudstack-azure-observability/actions/workflows/ci.yml)
 
 Sends WordPress request, exception and browser telemetry to Azure Application Insights, with
 automatic Azure environment detection, client/server correlation, and privacy controls suitable
@@ -21,9 +21,11 @@ Monitor workbooks bind to.
 > [`docs/`](docs/README.md) are removed from git history. See [`docs/README.md`](docs/README.md)
 > for the sequence to follow before making it public.
 
-**Pre-release — Phases A to C complete.** Foundation, configuration, telemetry core and the
-non-blocking transport layer are in place and tested. Collectors are not yet wired up, so the
-plugin does not emit telemetry yet; see [`CHANGELOG.md`](CHANGELOG.md) for what remains.
+**Pre-release — Phases A to E complete.** The plugin collects and transmits telemetry end to
+end, and has a settings screen, a diagnostics self-test and Site Health integration.
+
+Not yet done: integration testing inside a real WordPress install, the latency benchmark that
+gates release, and WordPress.org submission. See [`CHANGELOG.md`](CHANGELOG.md).
 
 The 1.x source, which shipped inside the KloudStack WordPress image, is retained under
 [`legacy/`](legacy/) for reference and is not maintained.

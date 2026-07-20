@@ -231,7 +231,10 @@ final class Plugin
             return;
         }
 
-        // SettingsPage, Diagnostics, SiteHealth — Phase E.
+        // Registered even when the plugin is unconfigured — that is precisely when an
+        // administrator needs the settings page and the self-test.
+        (new Admin\SettingsPage($this->config, $this->settings, $this))->register();
+        (new Admin\SiteHealth($this->config, $this->settings, $this))->register();
     }
 
     /**
