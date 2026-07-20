@@ -1,0 +1,15 @@
+includes:
+    - vendor/szepeviktor/phpstan-wordpress/extension.neon
+
+parameters:
+    level: 6
+    paths:
+        - kloudstack-azure-observability.php
+        - src
+        - loader
+    excludePaths:
+        - legacy/*
+        - src/Client/assets/*
+    bootstrapFiles:
+        - tests/phpstan-bootstrap.php
+    treatPhpDocTypesAsCertain: false

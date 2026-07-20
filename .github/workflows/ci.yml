@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Syntax (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - name: Lint
+        run: |
+          find . -path ./vendor -prune -o -path ./legacy -prune -o -name '*.php' -print0 \
+            | xargs -0 -n1 -P4 php -l
+
+  standards:
+    name: Coding standards and static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+          tools: composer:v2
+      - uses: ramsey/composer-install@v3
+      - name: PHPCS
+        run: composer run lint
+      - name: PHPStan
+        run: composer run analyse
+
+  test:
+    name: Unit tests (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.2', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:v2
+      - uses: ramsey/composer-install@v3
+      - name: PHPUnit
+        run: composer run test
+
+  version-consistency:
+    name: Version consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Versions must match across all declarations
+        # The 1.x plugin drifted — header said 1.2.3 while the telemetry sdkVersion tag said
+        # 1.1.0. This job makes that class of drift a build failure rather than a support
+        # mystery, since sdkVersion is what appears in Azure.
+        run: |
+          set -euo pipefail
+          header=$(grep -oP '^\s*\*\s*Version:\s*\K.+' kloudstack-azure-observability.php | tr -d '[:space:]')
+          const=$(grep -oP "^const VERSION\s*=\s*'\K[^']+" kloudstack-azure-observability.php)
+          readme=$(grep -oP '^Stable tag:\s*\K.+' readme.txt | tr -d '[:space:]')
+
+          echo "plugin header : $header"
+          echo "VERSION const : $const"
+          echo "readme stable : $readme"
+
+          if [ "$header" != "$const" ]; then
+            echo "::error::Plugin header version ($header) does not match the VERSION constant ($const)."
+            exit 1
+          fi
+
+          # A -dev suffix is expected on main and is not required to appear in readme.txt.
+          if [ "${header%-dev}" = "$header" ] && [ "$header" != "$readme" ]; then
+            echo "::error::Plugin version ($header) does not match readme.txt stable tag ($readme)."
+            exit 1
+          fi

@@ -1,0 +1,38 @@
+{
+    "name": "kloudstack/kloudstack-azure-observability",
+    "description": "Azure Application Insights telemetry for WordPress on Azure",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "homepage": "https://kloudstack.com/plugins/azure-observability/",
+    "require": {
+        "php": ">=7.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.6",
+        "phpstan/phpstan": "^1.11",
+        "szepeviktor/phpstan-wordpress": "^1.3",
+        "squizlabs/php_codesniffer": "^3.10",
+        "wp-coding-standards/wpcs": "^3.1",
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+        "phpcompatibility/phpcompatibility-wp": "^2.1"
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        }
+    },
+    "scripts": {
+        "lint": "phpcs",
+        "lint:fix": "phpcbf",
+        "analyse": "phpstan analyse",
+        "test": "phpunit",
+        "check": [
+            "@lint",
+            "@analyse",
+            "@test"
+        ]
+    },
+    "extra": {
+        "note": "Development dependencies only. The distributed plugin ships no vendor directory and uses a hand-written PSR-4 autoloader."
+    }
+}

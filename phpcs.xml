@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<ruleset name="KloudStack Observability for Azure">
+    <description>WordPress Coding Standards for the KloudStack Azure Observability plugin.</description>
+
+    <file>.</file>
+
+    <exclude-pattern>/vendor/*</exclude-pattern>
+    <exclude-pattern>/node_modules/*</exclude-pattern>
+    <exclude-pattern>/legacy/*</exclude-pattern>
+    <exclude-pattern>/src/Client/assets/*</exclude-pattern>
+    <exclude-pattern>/tests/fixtures/*</exclude-pattern>
+
+    <arg name="extensions" value="php"/>
+    <arg name="colors"/>
+    <arg value="sp"/>
+    <arg name="parallel" value="8"/>
+
+    <rule ref="WordPress">
+        <!--
+            The plugin uses PSR-4 class autoloading with namespaced classes, which is incompatible
+            with WordPress's hyphenated file naming and prefixing conventions. Namespacing gives
+            the same collision safety those rules exist to provide.
+        -->
+        <exclude name="WordPress.Files.FileName"/>
+        <exclude name="WordPress.NamingConventions.PrefixAllGlobals"/>
+        <exclude name="WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase"/>
+    </rule>
+
+    <rule ref="WordPress.WP.I18n">
+        <properties>
+            <property name="text_domain" type="array" value="kloudstack-azure-observability"/>
+        </properties>
+    </rule>
+
+    <rule ref="PHPCompatibilityWP"/>
+    <config name="testVersion" value="7.4-"/>
+    <config name="minimum_wp_version" value="6.0"/>
+</ruleset>
