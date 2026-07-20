@@ -4,8 +4,22 @@ declare(strict_types=1);
 
 namespace KloudStack\Observability;
 
+use KloudStack\Observability\Client\SnippetInjector;
+use KloudStack\Observability\Collector\ExceptionCollector;
+use KloudStack\Observability\Collector\RequestCollector;
+use KloudStack\Observability\Context\AzureContext;
+use KloudStack\Observability\Context\Correlation;
+use KloudStack\Observability\Context\WordPressContext;
 use KloudStack\Observability\Support\Guard;
 use KloudStack\Observability\Support\Log;
+use KloudStack\Observability\Telemetry\Buffer;
+use KloudStack\Observability\Telemetry\Envelope;
+use KloudStack\Observability\Telemetry\Privacy;
+use KloudStack\Observability\Telemetry\Reporter;
+use KloudStack\Observability\Telemetry\Sampler;
+use KloudStack\Observability\Transport\CircuitBreaker;
+use KloudStack\Observability\Transport\ResponseRelease;
+use KloudStack\Observability\Transport\Transport;
 
 defined('ABSPATH') || exit;
 
@@ -23,17 +37,41 @@ final class Plugin
     /** @var Config */
     private $config;
 
+    /** @var Settings */
+    private $settings;
+
+    /** @var Reporter|null */
+    private $reporter = null;
+
     /** @var bool */
     private $booted = false;
 
-    public function __construct(?Config $config = null)
+    public function __construct(?Config $config = null, ?Settings $settings = null)
     {
-        $this->config = $config ?? new Config();
+        $this->config   = $config ?? new Config();
+        $this->settings = $settings ?? new Settings();
     }
 
     public function config(): Config
     {
         return $this->config;
+    }
+
+    public function settings(): Settings
+    {
+        return $this->settings;
+    }
+
+    /**
+     * The active reporter, or null when telemetry is not running.
+     *
+     * Exposed so the diagnostics self-test can send a test item through exactly the same path
+     * production telemetry takes, rather than a parallel implementation that could pass while the
+     * real one is broken.
+     */
+    public function reporter(): ?Reporter
+    {
+        return $this->reporter;
     }
 
     /**
@@ -90,24 +128,96 @@ final class Plugin
      */
     private function isTelemetryEnabled(): bool
     {
-        $enabled = (bool) get_option(PREFIX . 'enabled', true);
-
-        return (bool) apply_filters('kloudstack_obs_setting_enabled', $enabled);
+        return $this->settings->bool('enabled');
     }
 
     /**
-     * Collector registration.
+     * Build the telemetry pipeline and register the collectors.
      *
-     * Phase D of the implementation plan. Deliberately left unwired so that Phase A can be
-     * merged, reviewed and released independently of telemetry collection.
+     * Object construction here is cheap and allocation-only — no network, no database, no
+     * filesystem. The expensive work happens after the response has been released.
      */
     private function registerCollectors(): void
     {
-        // RequestCollector, ExceptionCollector, ErrorCollector, SnippetInjector — Phase D.
-        Log::debug('Configured and enabled; collectors pending Phase D.', [
+        $credentials = $this->config->credentials();
+
+        if ($credentials === null) {
+            return;
+        }
+
+        $azure = new AzureContext(
+            $this->settings->string('cloud_role'),
+            self::siteHost()
+        );
+
+        $wordpress = new WordPressContext(
+            SCHEMA_VERSION,
+            VERSION,
+            $this->loadMode(),
+            $this->config->isManaged()
+        );
+
+        $correlation = new Correlation();
+
+        $privacy = new Privacy(
+            $this->settings->bool('anonymise_ip'),
+            $this->settings->queryAllowlist(),
+            $this->settings->bool('header_tracking')
+        );
+
+        $this->reporter = new Reporter(
+            new Envelope($credentials['ikey'], 'php:kloudstack_' . VERSION),
+            new Buffer(),
+            new Sampler($this->settings->samplingRate()),
+            new Transport($credentials['endpoint'], new CircuitBreaker()),
+            new ResponseRelease(),
+            $azure,
+            $wordpress,
+            $correlation
+        );
+
+        // The exception collector registers first so its shutdown handler runs before the
+        // request collector's. That ordering matters: a fatal must be recorded into the buffer
+        // before the request collector flushes it, or the fatal is collected and then thrown away
+        // with nothing to send it.
+        (new ExceptionCollector($this->reporter))->register();
+        (new RequestCollector($this->reporter, $this->settings, $privacy))->register();
+
+        // REST routes are the authoritative operation name when a request is a REST call.
+        add_filter('rest_pre_dispatch', Guard::wrap(
+            static function ($result, $server, $request) {
+                if (is_object($request) && method_exists($request, 'get_route')) {
+                    $GLOBALS['kloudstack_obs_rest_route'] = (string) $request->get_route();
+                }
+
+                return $result;
+            },
+            'rest.route_capture'
+        ), 10, 3);
+
+        if (!is_admin()) {
+            (new SnippetInjector($this->config, $this->settings, $correlation, $azure))->register();
+        }
+
+        Log::debug('Telemetry collectors registered.', [
             'source'    => $this->config->source(),
             'load_mode' => $this->loadMode(),
+            'role'      => $azure->role(),
         ]);
+    }
+
+    /**
+     * The site's host, used as a cloud role fallback when Azure metadata is unavailable.
+     */
+    private static function siteHost(): string
+    {
+        if (!function_exists('home_url')) {
+            return '';
+        }
+
+        $host = wp_parse_url((string) home_url(), PHP_URL_HOST);
+
+        return is_string($host) ? $host : '';
     }
 
     /**

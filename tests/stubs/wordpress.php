@@ -38,6 +38,12 @@ final class WPStubs
     /** @var array<string, mixed> */
     public static $transients = [];
 
+    /** @var array<string, array<int, callable>> */
+    public static $actions = [];
+
+    /** @var string */
+    public static $homeUrl = 'https://example.com';
+
     public static function reset(): void
     {
         self::$options             = [];
@@ -49,6 +55,8 @@ final class WPStubs
         self::$userLoggedIn        = false;
         self::$usingExtObjectCache = false;
         self::$transients          = [];
+        self::$actions             = [];
+        self::$homeUrl             = 'https://example.com';
     }
 }
 
@@ -203,5 +211,45 @@ if (!function_exists('delete_transient')) {
         unset(WPStubs::$transients[$transient]);
 
         return true;
+    }
+}
+
+if (!function_exists('add_action')) {
+    function add_action(string $hook, callable $callback, int $priority = 10, int $args = 1): bool
+    {
+        WPStubs::$actions[$hook][] = $callback;
+
+        return true;
+    }
+}
+
+if (!function_exists('esc_url')) {
+    function esc_url(string $url): string
+    {
+        return filter_var($url, FILTER_SANITIZE_URL) ?: '';
+    }
+}
+
+if (!function_exists('esc_attr')) {
+    function esc_attr(string $text): string
+    {
+        return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+if (!function_exists('wp_parse_url')) {
+    /**
+     * @return mixed
+     */
+    function wp_parse_url(string $url, int $component = -1)
+    {
+        return parse_url($url, $component);
+    }
+}
+
+if (!function_exists('home_url')) {
+    function home_url(): string
+    {
+        return WPStubs::$homeUrl;
     }
 }
