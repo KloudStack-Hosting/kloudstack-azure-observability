@@ -17,8 +17,13 @@ Monitor workbooks bind to.
 
 ## Status
 
-**Pre-release — Phase A complete.** Foundation, configuration resolution and CI are in place.
-Telemetry collection is not yet wired up; see [`CHANGELOG.md`](CHANGELOG.md) for what remains.
+> **This repository is private.** It must stay private until the internal planning documents in
+> [`docs/`](docs/README.md) are removed from git history. See [`docs/README.md`](docs/README.md)
+> for the sequence to follow before making it public.
+
+**Pre-release — Phases A to C complete.** Foundation, configuration, telemetry core and the
+non-blocking transport layer are in place and tested. Collectors are not yet wired up, so the
+plugin does not emit telemetry yet; see [`CHANGELOG.md`](CHANGELOG.md) for what remains.
 
 The 1.x source, which shipped inside the KloudStack WordPress image, is retained under
 [`legacy/`](legacy/) for reference and is not maintained.
