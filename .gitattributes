@@ -1,0 +1,30 @@
+# Normalise line endings. The plugin is developed on Windows and deployed to Linux App Service
+# and WordPress.org SVN, so LF is enforced in the repository regardless of checkout platform.
+* text=auto eol=lf
+
+*.php   text eol=lf
+*.txt   text eol=lf
+*.md    text eol=lf
+*.xml   text eol=lf
+*.json  text eol=lf
+*.neon  text eol=lf
+*.yml   text eol=lf
+
+*.png   binary
+*.jpg   binary
+*.zip   binary
+
+# Excluded from the distributed archive. The shipped plugin contains no tests, tooling,
+# development configuration or legacy source.
+/.github            export-ignore
+/tests              export-ignore
+/docs               export-ignore
+/legacy             export-ignore
+/.gitattributes     export-ignore
+/.gitignore         export-ignore
+/composer.json      export-ignore
+/phpcs.xml          export-ignore
+/phpstan.neon       export-ignore
+/phpunit.xml        export-ignore
+/README.md          export-ignore
+/CHANGELOG.md       export-ignore
