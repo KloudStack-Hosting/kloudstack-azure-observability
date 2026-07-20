@@ -5,7 +5,9 @@
 *.zip
 .phpunit.result.cache
 .phpcs-cache
-composer.lock
+# composer.lock IS committed: dev-dependency versions must be identical in CI and
+# locally, and the lock is what pins the resolution produced under
+# config.platform.php = 7.4. It never ships -- the distributed artifact has no vendor/.
 /tests/coverage/
 .DS_Store
 Thumbs.db
