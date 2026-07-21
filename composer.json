@@ -3,7 +3,7 @@
     "description": "Azure Application Insights telemetry for WordPress on Azure",
     "type": "wordpress-plugin",
     "license": "GPL-2.0-or-later",
-    "homepage": "https://kloudstack.com/plugins/azure-observability/",
+    "homepage": "https://kloudstack.com.au/plugins/azure-observability/",
     "require": {
         "php": ">=7.4"
     },
