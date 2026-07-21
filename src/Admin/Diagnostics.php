@@ -107,18 +107,26 @@ final class Diagnostics
 
     /**
      * Plain-text report, for pasting into a support ticket.
+     *
+     * @param bool                                                                        $includeLive Run the checks now, including the live round-trip.
+     * @param array<int, array{id: string, label: string, status: string, message: string}>|null $checks  Render these instead of re-running.
+     *
+     * Passing an already-computed result set matters: the settings page has just run the full
+     * check including the live round-trip, and re-running without it would silently drop the most
+     * diagnostic line from the report people actually paste into support tickets.
      */
-    public function asText(bool $includeLive = true): string
+    public function asText(bool $includeLive = true, ?array $checks = null): string
     {
         $lines = [
             'KloudStack Observability for Azure — diagnostics',
             'Plugin ' . \KloudStack\Observability\VERSION
                 . ' | schema v' . \KloudStack\Observability\SCHEMA_VERSION
-                . ' | PHP ' . PHP_VERSION,
+                . ' | PHP ' . PHP_VERSION
+                . ' | WordPress ' . (isset($GLOBALS['wp_version']) ? (string) $GLOBALS['wp_version'] : 'unknown'),
             str_repeat('-', 60),
         ];
 
-        foreach ($this->run($includeLive) as $check) {
+        foreach ($checks ?? $this->run($includeLive) as $check) {
             $lines[] = sprintf(
                 '[%s] %s: %s',
                 strtoupper($check['status']),
@@ -316,23 +324,45 @@ final class Diagnostics
      */
     private function checkDuplicateInstrumentation(): array
     {
+        $conflicts = [];
+
+        /*
+         * The KloudStack 1.x must-use plugin. Checked first because on a KloudStack stack it is
+         * by far the most likely duplicate, and because it cannot be deactivated from the admin
+         * — an administrator looking at the Plugins screen has no way to see it is running.
+         *
+         * A live stack proved this matters: the file was renamed to .disabled, the platform
+         * re-pushed it 40 minutes later, and both versions recorded every request while this
+         * check reported no conflict.
+         */
+        if (defined('WPMU_PLUGIN_DIR') && file_exists(WPMU_PLUGIN_DIR . '/kloudstack-appinsights.php')) {
+            $conflicts[] = 'the KloudStack 1.x must-use plugin (wp-content/mu-plugins/kloudstack-appinsights.php)';
+        }
+
         $agent = getenv(self::APP_SERVICE_AGENT);
 
         if (is_string($agent) && $agent !== '' && $agent !== '~0' && strtolower($agent) !== 'disabled') {
+            $conflicts[] = 'the App Service Application Insights extension';
+        }
+
+        if ($conflicts === []) {
             return self::result(
                 'duplicate',
                 'Duplicate instrumentation',
-                self::STATUS_WARN,
-                'The App Service Application Insights extension is also enabled. Requests may be recorded '
-                . 'twice and ingestion charged twice. Disable one of the two.'
+                self::STATUS_PASS,
+                'No conflicting instrumentation detected.'
             );
         }
 
         return self::result(
             'duplicate',
             'Duplicate instrumentation',
-            self::STATUS_PASS,
-            'No conflicting auto-instrumentation detected.'
+            // A failure, not a warning: every request is being recorded twice, the customer is
+            // being charged twice for ingestion, and the resulting counts are wrong.
+            self::STATUS_FAIL,
+            'Also collecting telemetry: ' . implode(' and ', $conflicts) . '. '
+            . 'Every request is recorded twice, Azure ingestion is charged twice, and request '
+            . 'counts and percentiles will be wrong. Remove one of them.'
         );
     }
 

@@ -419,8 +419,12 @@ final class SettingsPage
             'Copy this when contacting support:',
             'kloudstack-azure-observability'
         ) . '</label></p>';
-        echo '<textarea id="kloudstack_obs_report" class="large-text code" rows="12" readonly>'
-            . esc_textarea($diagnostics->asText(false)) . '</textarea>';
+
+        // Render the stored result rather than re-running. Re-running would repeat the live
+        // round-trip on every page load, and re-running without it would drop the "Test telemetry"
+        // line — the single most useful check — from the report people actually paste.
+        echo '<textarea id="kloudstack_obs_report" class="large-text code" rows="14" readonly>'
+            . esc_textarea($diagnostics->asText(false, $result)) . '</textarea>';
     }
 
     private static function statusLabel(string $status): string

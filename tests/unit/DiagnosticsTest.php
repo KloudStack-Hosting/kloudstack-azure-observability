@@ -121,7 +121,35 @@ final class DiagnosticsTest extends TestCase
 
         $check = $this->find($this->diagnostics()->run(false), 'duplicate');
 
-        self::assertSame(Diagnostics::STATUS_WARN, $check['status']);
+        self::assertSame(Diagnostics::STATUS_FAIL, $check['status']);
+        self::assertStringContainsString('twice', $check['message']);
+    }
+
+    public function testLegacyMuPluginIsDetectedAsDuplicate(): void
+    {
+        // A live stack proved this: the 1.x file was renamed to .disabled, the platform re-pushed
+        // it 40 minutes later, and both versions recorded every request while this check reported
+        // no conflict. It is invisible from the Plugins screen, so the self-test is the only
+        // place an administrator can find out.
+        $dir = sys_get_temp_dir() . '/ksobs-mu-' . uniqid('', true);
+        mkdir($dir);
+        file_put_contents($dir . '/kloudstack-appinsights.php', '<?php // 1.x');
+
+        if (!defined('WPMU_PLUGIN_DIR')) {
+            define('WPMU_PLUGIN_DIR', $dir);
+        }
+
+        $check = $this->find($this->diagnostics()->run(false), 'duplicate');
+
+        unlink($dir . '/kloudstack-appinsights.php');
+        rmdir($dir);
+
+        if (WPMU_PLUGIN_DIR !== $dir) {
+            self::markTestSkipped('WPMU_PLUGIN_DIR already defined by another test.');
+        }
+
+        self::assertSame(Diagnostics::STATUS_FAIL, $check['status'], 'Double-billing is a failure, not a warning.');
+        self::assertStringContainsString('1.x must-use plugin', $check['message']);
         self::assertStringContainsString('twice', $check['message']);
     }
 
@@ -253,6 +281,20 @@ final class DiagnosticsTest extends TestCase
         self::assertStringContainsString('KloudStack Observability for Azure', $text);
         self::assertStringContainsString('PHP ' . PHP_VERSION, $text);
         self::assertStringContainsString('[FAIL] Connection', $text);
+    }
+
+    public function testTextReportCanRenderAPreComputedResult(): void
+    {
+        // The settings page has already run the full check including the live round-trip. Passing
+        // it back avoids both re-running the round-trip and silently dropping it from the report.
+        $checks = [
+            ['id' => 'live', 'label' => 'Test telemetry', 'status' => Diagnostics::STATUS_PASS, 'message' => 'Accepted by Azure in 210ms.'],
+        ];
+
+        $text = $this->diagnostics()->asText(false, $checks);
+
+        self::assertStringContainsString('[PASS] Test telemetry: Accepted by Azure in 210ms.', $text);
+        self::assertStringNotContainsString('Connection', $text, 'Only the supplied checks should be rendered.');
     }
 
     public function testEveryCheckReportsAKnownStatus(): void
