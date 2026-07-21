@@ -41,7 +41,13 @@
     <rule ref="PSR12"/>
 
     <!-- Correctness: escaping, sanitisation, nonces, SQL. The sniffs that actually matter. -->
-    <rule ref="WordPress.Security"/>
+    <rule ref="WordPress.Security">
+        <!--
+            scripts/ is build tooling run from the CLI. It never renders into a web response, so
+            output escaping is meaningless there — and applying it would obscure the build log.
+        -->
+        <exclude-pattern>/scripts/*</exclude-pattern>
+    </rule>
 
     <!-- Correctness: unsafe or deprecated WordPress APIs, direct filesystem and DB access. -->
     <rule ref="WordPress.WP"/>

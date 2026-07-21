@@ -44,9 +44,14 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            # A tagged release is exactly its tag. Reproducible, and checked against the code below.
             version="${GITHUB_REF_NAME#v}"
           else
-            version="${{ github.event.inputs.version }}"
+            # Every dispatch build gets the commit appended, because two builds from different
+            # commits reporting the same version is indistinguishable from inside WordPress —
+            # the diagnostics report and the sdkVersion in Azure both show only this string, so
+            # without it there is no way to tell whether a fix is actually deployed.
+            version="${{ github.event.inputs.version }}+${GITHUB_SHA::7}"
           fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "Building version ${version}"
@@ -114,6 +119,26 @@ jobs:
             find "build/${slug}" -name '.*' -not -name '.'
             exit 1
           fi
+
+          # Stamp the resolved version into the STAGED copy, never the working tree.
+          #
+          # Without this the version input only named the ZIP: a file called "…-rc3.zip" still
+          # reported 2.0.0-dev from inside WordPress, so successive builds were indistinguishable
+          # in the diagnostics report and in Azure's sdkVersion.
+          php scripts/stamp-version.php "${version}" "build/${slug}/kloudstack-azure-observability.php"
+
+          # Verify independently of the script that wrote it. A stamp that fails silently ships a
+          # package which lies about its own contents.
+          stamped_header=$(grep -oP '^\s*\*\s*Version:\s*\K.+' "build/${slug}/kloudstack-azure-observability.php" | tr -d '[:space:]')
+          stamped_const=$(grep -oP "^const VERSION\s*=\s*'\K[^']+" "build/${slug}/kloudstack-azure-observability.php")
+
+          if [ "$stamped_header" != "$version" ] || [ "$stamped_const" != "$version" ]; then
+            echo "::error::Version stamping failed. header='${stamped_header}' const='${stamped_const}' expected='${version}'"
+            exit 1
+          fi
+
+          php -l "build/${slug}/kloudstack-azure-observability.php"
+          echo "Stamped version: ${version}"
 
           # The plugin must be able to run from what is in the archive.
           test -f "build/${slug}/kloudstack-azure-observability.php"
