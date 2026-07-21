@@ -277,13 +277,41 @@ final class RequestCollector
      * WordPress rewrite rules are regular expressions such as
      * "([0-9]{4})/([0-9]{1,2})/([^/]+)/?$". As an operation name that is accurate but unreadable,
      * so capture groups become placeholders.
+     *
+     * Collapsing groups needs to be iterative. A single pass over "\([^)]*\)" cannot handle nested
+     * groups such as "(?:/([0-9]+))?" — it consumes the inner group and leaves the outer closing
+     * ")?" stranded. A live site produced the operation name "GET /{x}{x})?" that way, which is
+     * both meaningless and leaks regex syntax into Azure Monitor.
      */
-    private static function readableRule(string $rule): string
+    public static function readableRule(string $rule): string
     {
-        $rule = (string) preg_replace('/\([^)]*\)(\{[\d,]+\})?/', '{x}', $rule);
+        // Collapse innermost groups repeatedly until none remain. Bounded because each pass must
+        // shorten the string, and a malformed rule must not spin.
+        for ($pass = 0; $pass < 10; ++$pass) {
+            $collapsed = preg_replace('/\((?:\?[:=!][^()]*|[^()]*)\)(?:\{[\d,]+\}|[*+?])?/', '{x}', $rule);
+
+            if (!is_string($collapsed) || $collapsed === $rule) {
+                break;
+            }
+
+            $rule = $collapsed;
+        }
+
+        // Strip regex anchors and quantifiers that survive at the edges.
         $rule = str_replace(['?$', '$', '^'], '', $rule);
 
-        return '/' . ltrim($rule, '/');
+        // Collapse runs of adjacent placeholders: "{x}{x}" reads as one unknown segment, not two.
+        $rule = (string) preg_replace('/(\{x\})+/', '{x}', $rule);
+
+        // Anything still carrying regex punctuation is not usable as a name. Better to report a
+        // generic route than a malformed one that fragments the operation-name dimension.
+        if (preg_match('/[()\[\]|\\\\]/', $rule) === 1) {
+            return '';
+        }
+
+        $rule = trim($rule, '/');
+
+        return $rule === '' ? '/' : '/' . $rule;
     }
 
     private static function server(string $key): string
