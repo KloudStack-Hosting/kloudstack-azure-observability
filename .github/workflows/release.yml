@@ -134,16 +134,63 @@ jobs:
       # The MU-loader ships separately: the image places it in mu-plugins/, not inside the
       # plugin directory.
       - name: Stage the must-use loader
-        run: cp loader/kloudstack-obs-loader.php build/
+        run: |
+          mkdir -p loader-artifact
+          cp loader/kloudstack-obs-loader.php loader-artifact/
 
-      - uses: actions/upload-artifact@v4
+      # Two artifacts, deliberately.
+      #
+      # GitHub wraps every artifact in a second ZIP. When the loader sat alongside the plugin in
+      # one artifact, uploading the downloaded wrapper straight to WordPress installed the LOADER:
+      # WordPress scans an archive root for a plugin header, kloudstack-obs-loader.php has one, and
+      # it installs silently with no error and no telemetry. Keeping them apart means the plugin
+      # artifact contains nothing WordPress could mistake for a plugin.
+      - name: Upload plugin package
+        uses: actions/upload-artifact@v4
         with:
-          name: kloudstack-azure-observability-${{ steps.version.outputs.version }}
+          name: PLUGIN-kloudstack-azure-observability-${{ steps.version.outputs.version }}
           path: |
             build/*.zip
             build/*.sha256
-            build/kloudstack-obs-loader.php
           retention-days: 30
+
+      - name: Upload must-use loader
+        uses: actions/upload-artifact@v4
+        with:
+          name: MU-LOADER-image-builds-only-${{ steps.version.outputs.version }}
+          path: loader-artifact/kloudstack-obs-loader.php
+          retention-days: 30
+
+      - name: Installation instructions
+        run: |
+          {
+            echo "## Download"
+            echo ""
+            echo "Two artifacts are attached to this run:"
+            echo ""
+            echo "| Artifact | Use |"
+            echo "|---|---|"
+            echo "| \`PLUGIN-…\` | **This is the one you want.** Install in WordPress |"
+            echo "| \`MU-LOADER-…\` | Image builds only. Not a WordPress upload |"
+            echo ""
+            echo "### Installing"
+            echo ""
+            echo "GitHub wraps artifacts in a second ZIP, so:"
+            echo ""
+            echo "1. Download the \`PLUGIN-…\` artifact"
+            echo "2. **Extract it** — inside is \`kloudstack-azure-observability-${{ steps.version.outputs.version }}.zip\`"
+            echo "3. Upload **that inner ZIP** at Plugins → Add New → Upload Plugin"
+            echo ""
+            echo "Uploading the outer wrapper installs the wrong thing or fails."
+            echo ""
+            echo "### Before installing on a stack running 1.x"
+            echo ""
+            echo "The 1.x plugin is a must-use plugin and cannot be deactivated from the admin."
+            echo "Rename \`wp-content/mu-plugins/kloudstack-appinsights.php\` to \`.disabled\` via Kudu first,"
+            echo "or both versions collect and Azure ingestion is charged twice."
+            echo ""
+            echo "After activating: **Tools → KloudStack Observability → Run self-test**."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish release
         if: github.ref_type == 'tag'
