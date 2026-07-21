@@ -122,14 +122,16 @@ jobs:
           test -f "build/${slug}/LICENSE"
           test -d "build/${slug}/src"
 
-          cd build
-          zip -rq "${slug}-${version}.zip" "${slug}"
-          sha256sum "${slug}-${version}.zip" > "${slug}-${version}.zip.sha256"
+          # The ZIP is built into a separate directory so that build/ contains nothing but the
+          # plugin directory. That matters for how the artifact is uploaded below.
+          mkdir -p dist
+          (cd build && zip -rq "../dist/${slug}-${version}.zip" "${slug}")
+          (cd dist && sha256sum "${slug}-${version}.zip" > "${slug}-${version}.zip.sha256")
 
           echo "--- package contents ---"
-          unzip -l "${slug}-${version}.zip"
+          unzip -l "dist/${slug}-${version}.zip"
           echo "--- checksum ---"
-          cat "${slug}-${version}.zip.sha256"
+          cat "dist/${slug}-${version}.zip.sha256"
 
       # The MU-loader ships separately: the image places it in mu-plugins/, not inside the
       # plugin directory.
@@ -138,21 +140,37 @@ jobs:
           mkdir -p loader-artifact
           cp loader/kloudstack-obs-loader.php loader-artifact/
 
-      # Two artifacts, deliberately.
+      # Upload the plugin DIRECTORY, not a zip of it.
       #
-      # GitHub wraps every artifact in a second ZIP. When the loader sat alongside the plugin in
-      # one artifact, uploading the downloaded wrapper straight to WordPress installed the LOADER:
-      # WordPress scans an archive root for a plugin header, kloudstack-obs-loader.php has one, and
-      # it installs silently with no error and no telemetry. Keeping them apart means the plugin
-      # artifact contains nothing WordPress could mistake for a plugin.
+      # GitHub always wraps an artifact in its own ZIP and that is not avoidable. Earlier attempts
+      # fought it: a .zip inside the artifact meant the download was a zip containing a zip, and
+      # uploading the wrapper to WordPress either installed the wrong plugin or failed with
+      # "No valid plugins were found".
+      #
+      # Turning it around, the wrapper becomes the deliverable. upload-artifact uploads a
+      # directory's contents relative to that directory, so pointing it at build/ -- which holds
+      # nothing but kloudstack-azure-observability/ -- produces a wrapper whose root is exactly
+      # that one directory.
+      #
+      # That is precisely what a WordPress plugin ZIP is, so the artifact downloads and installs
+      # directly, with no extraction step and nothing to get wrong.
       - name: Upload plugin package
         uses: actions/upload-artifact@v4
         with:
           name: PLUGIN-kloudstack-azure-observability-${{ steps.version.outputs.version }}
-          path: |
-            build/*.zip
-            build/*.sha256
+          path: build
           retention-days: 30
+          if-no-files-found: error
+
+      # The checksummed ZIP is still built and kept, for the image build and for verifying a
+      # tagged release. It is a separate artifact so it can never end up in the installable one.
+      - name: Upload checksummed archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARCHIVE-checksummed-zip-${{ steps.version.outputs.version }}
+          path: dist
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Upload must-use loader
         uses: actions/upload-artifact@v4
@@ -160,28 +178,25 @@ jobs:
           name: MU-LOADER-image-builds-only-${{ steps.version.outputs.version }}
           path: loader-artifact/kloudstack-obs-loader.php
           retention-days: 30
+          if-no-files-found: error
 
       - name: Installation instructions
         run: |
           {
-            echo "## Download"
+            echo "## Install"
             echo ""
-            echo "Two artifacts are attached to this run:"
+            echo "Download **\`PLUGIN-kloudstack-azure-observability-${{ steps.version.outputs.version }}\`**"
+            echo "and upload it as-is at **Plugins → Add New → Upload Plugin**."
+            echo ""
+            echo "**Do not extract it.** The downloaded file is already a valid WordPress plugin archive."
+            echo ""
+            echo "### Other artifacts"
             echo ""
             echo "| Artifact | Use |"
             echo "|---|---|"
-            echo "| \`PLUGIN-…\` | **This is the one you want.** Install in WordPress |"
-            echo "| \`MU-LOADER-…\` | Image builds only. Not a WordPress upload |"
-            echo ""
-            echo "### Installing"
-            echo ""
-            echo "GitHub wraps artifacts in a second ZIP, so:"
-            echo ""
-            echo "1. Download the \`PLUGIN-…\` artifact"
-            echo "2. **Extract it** — inside is \`kloudstack-azure-observability-${{ steps.version.outputs.version }}.zip\`"
-            echo "3. Upload **that inner ZIP** at Plugins → Add New → Upload Plugin"
-            echo ""
-            echo "Uploading the outer wrapper installs the wrong thing or fails."
+            echo "| \`PLUGIN-…\` | Install this in WordPress. Upload the download unchanged |"
+            echo "| \`ARCHIVE-checksummed-zip-…\` | The versioned ZIP and its SHA-256, for the image build |"
+            echo "| \`MU-LOADER-…\` | Image builds only. Never a WordPress upload |"
             echo ""
             echo "### Before installing on a stack running 1.x"
             echo ""
@@ -189,17 +204,20 @@ jobs:
             echo "Rename \`wp-content/mu-plugins/kloudstack-appinsights.php\` to \`.disabled\` via Kudu first,"
             echo "or both versions collect and Azure ingestion is charged twice."
             echo ""
-            echo "After activating: **Tools → KloudStack Observability → Run self-test**."
+            echo "After activating you should see **KloudStack Observability for Azure** in the plugin"
+            echo "list and a **Tools → KloudStack Observability** menu. Then run the self-test."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
+          # Release assets attach directly with no wrapper, so the plain ZIP is correct here —
+          # unlike workflow_dispatch artifacts, which GitHub always wraps.
           files: |
-            build/*.zip
-            build/*.sha256
-            build/kloudstack-obs-loader.php
+            dist/*.zip
+            dist/*.sha256
+            loader-artifact/kloudstack-obs-loader.php
           generate_release_notes: true
           body: |
             ## Installation
