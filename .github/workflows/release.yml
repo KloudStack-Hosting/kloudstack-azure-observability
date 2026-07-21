@@ -9,9 +9,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version label for the build (e.g. 2.0.0-rc1)'
+        description: 'Version label for the build (e.g. 2.0.0-rc1). The commit is appended automatically.'
         required: false
-        default: 'dev'
+        # Carries the base version so a build reports 2.0.0-dev+<sha> rather than a bare
+        # "dev+<sha>", which tells you nothing about which release line it belongs to and gives
+        # WordPress's version comparison nothing sensible to work with.
+        default: '2.0.0-dev'
 
 permissions:
   contents: write
