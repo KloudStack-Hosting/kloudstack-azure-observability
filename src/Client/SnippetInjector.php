@@ -183,6 +183,16 @@ final class SnippetInjector
     var ctx = window.kloudstackObs || {};
     var attempts = 0;
 
+    // Never throw into the page, but never fail invisibly either. An earlier version swallowed
+    // every error with a bare catch, which meant the SDK could fail to record anything while the
+    // console stayed clean — the one outcome an observability plugin must not have.
+    function fail(stage, err) {
+        ctx.error = { stage: stage, message: err && err.message ? err.message : String(err) };
+        if (window.console && window.console.error) {
+            window.console.error('[KloudStack Observability] ' + stage + ':', err);
+        }
+    }
+
     function start() {
         var sdk = window.Microsoft && window.Microsoft.ApplicationInsights;
 
@@ -190,32 +200,65 @@ final class SnippetInjector
             // The SDK loads async; retry briefly, then give up rather than polling forever.
             if (++attempts < 100) {
                 window.setTimeout(start, 50);
+                return;
             }
+
+            fail('sdk-load', new Error('Application Insights SDK did not load. Blocked by an ad blocker, CSP or network policy?'));
+            return;
+        }
+
+        var appInsights;
+
+        try {
+            appInsights = new sdk.ApplicationInsights({ config: cfg });
+            appInsights.loadAppInsights();
+        } catch (e) {
+            fail('init', e);
             return;
         }
 
         try {
-            var appInsights = new sdk.ApplicationInsights({ config: cfg });
-            appInsights.loadAppInsights();
-
             appInsights.addTelemetryInitializer(function (item) {
-                item.tags = item.tags || {};
-                if (ctx.operationId) {
-                    item.tags['ai.operation.id'] = ctx.operationId;
+                /*
+                 * Guarded and explicitly truthy-returning.
+                 *
+                 * The SDK drops an item when an initializer throws OR returns false, so a fault
+                 * here silently destroys the telemetry it was meant to enrich. Correlation is
+                 * worth having; it is not worth losing the page view over.
+                 *
+                 * tags is deliberately not reassigned: ITelemetryItem.tags is typed Tags & Tags[]
+                 * and replacing it with a plain object can break the SDK's own serialisation.
+                 */
+                try {
+                    if (item && item.tags) {
+                        if (ctx.operationId) {
+                            item.tags['ai.operation.id'] = ctx.operationId;
+                        }
+                        if (ctx.parentId) {
+                            item.tags['ai.operation.parentId'] = ctx.parentId;
+                        }
+                        if (ctx.role) {
+                            item.tags['ai.cloud.role'] = ctx.role;
+                        }
+                    }
+                } catch (e) {
+                    fail('initializer', e);
                 }
-                if (ctx.parentId) {
-                    item.tags['ai.operation.parentId'] = ctx.parentId;
-                }
-                if (ctx.role) {
-                    item.tags['ai.cloud.role'] = ctx.role;
-                }
-            });
 
-            appInsights.trackPageView();
-            window.appInsights = appInsights;
+                return true;
+            });
         } catch (e) {
-            // Telemetry must never break the page.
+            fail('add-initializer', e);
         }
+
+        try {
+            appInsights.trackPageView();
+        } catch (e) {
+            fail('track-page-view', e);
+        }
+
+        window.appInsights = appInsights;
+        ctx.ready = true;
     }
 
     start();
