@@ -1,0 +1,176 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # Lets a testable ZIP be produced without cutting a tag. The artifact is attached to the
+  # workflow run rather than published as a release.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version label for the build (e.g. 2.0.0-rc1)'
+        required: false
+        default: 'dev'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build plugin package
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+          tools: composer:v2
+
+      - uses: ramsey/composer-install@v3
+
+      # A broken build must never become a downloadable artifact — someone will install it.
+      - name: Verify before packaging
+        run: |
+          composer run lint
+          composer run analyse
+          composer run test
+
+      - name: Determine version
+        id: version
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="${{ github.event.inputs.version }}"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Building version ${version}"
+
+      # A tagged release must match the version declared in the code, or a site will report a
+      # version it is not running and the sdkVersion in Azure will be wrong.
+      - name: Tagged version must match the plugin header
+        if: github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+          header=$(grep -oP "^const VERSION\s*=\s*'\K[^']+" kloudstack-azure-observability.php)
+          tag="${{ steps.version.outputs.version }}"
+          if [ "$header" != "$tag" ]; then
+            echo "::error::Tag v${tag} does not match VERSION constant ${header}."
+            exit 1
+          fi
+
+      - name: Build package
+        run: |
+          set -euo pipefail
+          slug="kloudstack-azure-observability"
+          version="${{ steps.version.outputs.version }}"
+
+          # WordPress requires a single top-level directory named for the slug. A flat archive
+          # installs as an unusable mess, and the MU-loader's hardcoded plugin path depends on
+          # this name.
+          mkdir -p "build/${slug}"
+
+          rsync -a ./ "build/${slug}/" \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'build' \
+            --exclude 'vendor' \
+            --exclude 'node_modules' \
+            --exclude 'tests' \
+            --exclude 'docs' \
+            --exclude 'legacy' \
+            --exclude 'loader' \
+            --exclude '.gitattributes' \
+            --exclude '.gitignore' \
+            --exclude 'composer.json' \
+            --exclude 'composer.lock' \
+            --exclude 'phpcs.xml' \
+            --exclude 'phpstan.neon' \
+            --exclude 'phpunit.xml' \
+            --exclude 'README.md' \
+            --exclude 'CHANGELOG.md' \
+            --exclude '.phpunit.result.cache' \
+            --exclude '.phpcs-cache' \
+            --exclude '*.zip' \
+            --exclude '.DS_Store'
+
+          # Fail loudly rather than shipping internal planning documents or dev tooling.
+          for forbidden in docs tests vendor legacy .github composer.json phpunit.xml; do
+            if [ -e "build/${slug}/${forbidden}" ]; then
+              echo "::error::${forbidden} must not be in the distributed package."
+              exit 1
+            fi
+          done
+
+          # Nothing hidden should ship. A stray cache or dotfile in a plugin archive is at best
+          # noise and at worst a leaked path or credential.
+          if find "build/${slug}" -name '.*' -not -name '.' | grep -q .; then
+            echo "::error::Hidden files found in the package:"
+            find "build/${slug}" -name '.*' -not -name '.'
+            exit 1
+          fi
+
+          # The plugin must be able to run from what is in the archive.
+          test -f "build/${slug}/kloudstack-azure-observability.php"
+          test -f "build/${slug}/readme.txt"
+          test -f "build/${slug}/uninstall.php"
+          test -f "build/${slug}/LICENSE"
+          test -d "build/${slug}/src"
+
+          cd build
+          zip -rq "${slug}-${version}.zip" "${slug}"
+          sha256sum "${slug}-${version}.zip" > "${slug}-${version}.zip.sha256"
+
+          echo "--- package contents ---"
+          unzip -l "${slug}-${version}.zip"
+          echo "--- checksum ---"
+          cat "${slug}-${version}.zip.sha256"
+
+      # The MU-loader ships separately: the image places it in mu-plugins/, not inside the
+      # plugin directory.
+      - name: Stage the must-use loader
+        run: cp loader/kloudstack-obs-loader.php build/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kloudstack-azure-observability-${{ steps.version.outputs.version }}
+          path: |
+            build/*.zip
+            build/*.sha256
+            build/kloudstack-obs-loader.php
+          retention-days: 30
+
+      - name: Publish release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/*.zip
+            build/*.sha256
+            build/kloudstack-obs-loader.php
+          generate_release_notes: true
+          body: |
+            ## Installation
+
+            **Standard plugin** — download the `.zip` and upload it under
+            Plugins → Add New → Upload Plugin.
+
+            **KloudStack managed image** — the image pins this tag, verifies the published
+            SHA-256, and installs `kloudstack-obs-loader.php` into `mu-plugins/`.
+
+            ### Before installing on a stack running 1.x
+
+            The 1.x plugin is a must-use plugin and cannot be deactivated from the WordPress
+            admin. Rename `wp-content/mu-plugins/kloudstack-appinsights.php` first, or both
+            versions will collect telemetry and Azure ingestion will be charged twice.
+
+            Verify the download:
+
+            ```
+            sha256sum -c kloudstack-azure-observability-*.zip.sha256
+            ```
