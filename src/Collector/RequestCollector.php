@@ -97,15 +97,11 @@ final class RequestCollector
 
         $name = Correlation::operationName($method, $path, self::matchedRoute());
 
-        $dimensions = [];
-
+        // Passed as a tag rather than a dimension: ai.location.ip is what Azure's Users,
+        // Sessions and Location views read. It is already anonymised by Privacy.
         $clientIp = $this->privacy->clientIp();
 
-        if ($clientIp !== '') {
-            $dimensions['client_ip'] = $clientIp;
-        }
-
-        $this->reporter->trackRequest($name, $url, $durationMs, $status, $dimensions);
+        $this->reporter->trackRequest($name, $url, $durationMs, $status, [], $clientIp);
     }
 
     /**

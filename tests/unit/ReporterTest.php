@@ -106,11 +106,33 @@ final class ReporterTest extends TestCase
         self::assertArrayHasKey('ai.cloud.roleInstance', $tags);
     }
 
+    public function testClientIpIsSentAsTheLocationTagAzureActuallyReads(): void
+    {
+        // A live site proved this matters: with the address only in a custom dimension, the Users
+        // chart fell from ~130/hour to zero the moment this plugin took over. Azure reads
+        // ai.location.ip and nothing else for Users, Sessions and Location.
+        $reporter = $this->reporter();
+        $reporter->trackRequest('GET /', 'https://example.com/', 1.0, 200, [], '203.0.113.0');
+        $reporter->flush();
+
+        self::assertSame('203.0.113.0', $this->batches[0][0]['tags']['ai.location.ip']);
+    }
+
+    public function testLocationTagIsOmittedWhenNoAddressIsAvailable(): void
+    {
+        // An empty tag would be worse than none: Azure would treat it as a real value.
+        $reporter = $this->reporter();
+        $reporter->trackRequest('GET /', 'https://example.com/', 1.0, 200, [], '');
+        $reporter->flush();
+
+        self::assertArrayNotHasKey('ai.location.ip', $this->batches[0][0]['tags']);
+    }
+
     public function testSchemaDimensionsAreAttachedToEveryItem(): void
     {
         // The Marketplace workbook queries bind to these.
         $reporter = $this->reporter();
-        $reporter->trackRequest('GET /', 'https://example.com/', 1.0, 200, ['client_ip' => '203.0.113.0']);
+        $reporter->trackRequest('GET /', 'https://example.com/', 1.0, 200, ['custom_thing' => 'kept']);
         $reporter->flush();
 
         $properties = $this->batches[0][0]['data']['baseData']['properties'];
@@ -118,7 +140,7 @@ final class ReporterTest extends TestCase
         self::assertSame('1', $properties['schema_version']);
         self::assertSame('2.0.0', $properties['plugin_version']);
         self::assertSame('standard', $properties['load_mode']);
-        self::assertSame('203.0.113.0', $properties['client_ip'], 'Collector dimensions must survive the merge.');
+        self::assertSame('kept', $properties['custom_thing'], 'Collector dimensions must survive the merge.');
         self::assertArrayHasKey('azure_environment', $properties);
     }
 

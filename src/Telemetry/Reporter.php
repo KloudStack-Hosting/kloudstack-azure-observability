@@ -96,14 +96,36 @@ final class Reporter
      * Record a request.
      *
      * @param array<string, string> $dimensions Extra custom dimensions.
+     * @param string                $clientIp   Already-anonymised client address, or empty.
      */
     public function trackRequest(
         string $name,
         string $url,
         float $durationMs,
         int $responseCode,
-        array $dimensions = []
+        array $dimensions = [],
+        string $clientIp = ''
     ): void {
+        $tags = ['ai.operation.name' => Envelope::truncate($name, 1024)];
+
+        /*
+         * ai.location.ip is the field Application Insights actually reads. Without it the Users,
+         * Sessions and Location views stay empty and the application map has no geography,
+         * because Azure falls back to the socket address — which for server-side telemetry is the
+         * App Service itself, identical for every request.
+         *
+         * Putting the address only in a custom dimension, as this plugin previously did, keeps it
+         * queryable but invisible to every built-in view. A live site made that obvious: the Users
+         * chart fell from ~130/hour to zero at the moment this plugin took over.
+         *
+         * The value is anonymised before it reaches here (last IPv4 octet zeroed, last 80 bits of
+         * IPv6), so what Azure receives is already non-identifying. Azure then masks it again on
+         * ingestion unless DisableIpMasking is set, using it for geo lookup and discarding it.
+         */
+        if ($clientIp !== '') {
+            $tags['ai.location.ip'] = $clientIp;
+        }
+
         $this->track('Request', 'RequestData', [
             'id'           => $this->correlation->spanId(),
             'name'         => Envelope::truncate($name, 1024),
@@ -112,7 +134,7 @@ final class Reporter
             'responseCode' => (string) $responseCode,
             'success'      => $responseCode < 400,
             'properties'   => $this->dimensions($dimensions),
-        ], ['ai.operation.name' => Envelope::truncate($name, 1024)]);
+        ], $tags);
     }
 
     /**
