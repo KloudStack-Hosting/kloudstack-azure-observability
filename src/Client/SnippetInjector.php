@@ -16,11 +16,18 @@ defined('ABSPATH') || exit;
 /**
  * Application Insights JavaScript SDK injection.
  *
- * Two things distinguish this from the 1.x version:
+ * Uses Microsoft's official loader snippet (src/Client/snippet.js), the same loader 1.x used.
+ * An intermediate version replaced it with a hand-rolled script tag and a direct
+ * `new ApplicationInsights()`. That produced payloads Azure accepted -- itemsAccepted:1,
+ * errors:[], correct endpoint, correct key, correlation tags present -- which were then never
+ * indexed, while a site on the identical component and SDK version using the official snippet
+ * indexed normally. The supported loader is used rather than continuing to guess at why.
  *
- * 1. A telemetry initializer stamps the server request's operation id onto browser telemetry, so
- *    a page view can be joined to the request that produced it. Without it the two halves of the
- *    same page load are unrelated rows.
+ * What still differs from 1.x, and is the point of this class:
+ *
+ * 1. A telemetry initializer, registered through the snippet's onInit hook, stamps the server
+ *    request's operation id onto browser telemetry so a page view can be joined to the request
+ *    that produced it. Without it the two halves of the same page load are unrelated rows.
  *
  * 2. Request and response header tracking are off unless explicitly enabled. 1.x turned both on,
  *    which sends cookies and authorization headers to Azure with no disclosure.
@@ -129,20 +136,23 @@ final class SnippetInjector
             return;
         }
 
-        // Fully qualified: an unqualified reference would resolve to
-        // KloudStack\Observability\Client\PLUGIN_URL, which does not exist, and the bundled-SDK
-        // path would throw at runtime.
-        $source = $this->settings->bool('bundled_sdk')
-            ? \KloudStack\Observability\PLUGIN_URL . 'src/Client/assets/ai.3.gbl.min.js'
-            : self::CDN_URL;
-
-        $initializer = wp_json_encode([
+        $context = wp_json_encode([
             'operationId' => $this->correlation->operationId(),
             'parentId'    => $this->correlation->parentId(),
             'role'        => $this->azure->role(),
         ], JSON_UNESCAPED_SLASHES);
 
-        if (!is_string($initializer)) {
+        if (!is_string($context)) {
+            return;
+        }
+
+        $source = $this->settings->bool('bundled_sdk')
+            ? \KloudStack\Observability\PLUGIN_URL . 'src/Client/assets/ai.3.gbl.min.js'
+            : self::CDN_URL;
+
+        $snippet = self::loaderSnippet();
+
+        if ($snippet === '') {
             return;
         }
 
@@ -157,112 +167,102 @@ final class SnippetInjector
          *
          * phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped
          */
-        echo "\n<!-- KloudStack Observability for Azure -->\n";
-        echo '<script type="text/javascript"' . $nonceAttr . ' src="' . esc_url($source) . '" async></script>' . "\n";
-        echo '<script type="text/javascript"' . $nonceAttr . '>' . "\n";
-        echo 'window.kloudstackObs = ' . $initializer . ';' . "\n";
-        echo self::bootstrapScript($configJson);
-        echo "</script>\n";
-        echo "<!-- /KloudStack Observability for Azure -->\n";
+        echo "
+<!-- KloudStack Observability for Azure -->
+";
+        echo '<script type="text/javascript"' . $nonceAttr . '>' . "
+";
+        echo 'window.kloudstackObs = ' . $context . ';' . "
+";
+        echo $snippet . "
+";
+        echo self::loaderInvocation($source, $configJson);
+        echo "</script>
+";
+        echo "<!-- /KloudStack Observability for Azure -->
+";
         // phpcs:enable WordPress.Security.EscapeOutput.OutputNotEscaped
     }
 
     /**
-     * The inline bootstrap.
-     *
-     * Waits for the asynchronously loaded SDK rather than assuming it is present, then registers
-     * a telemetry initializer that stamps the server's operation id and cloud role onto every
-     * browser item. That stamping is the entire point of this file: it is what makes a page view
-     * joinable to its server request.
+     * Microsoft's official loader snippet, read from disk once per request.
      */
-    private static function bootstrapScript(string $configJson): string
+    private static function loaderSnippet(): string
     {
-        return <<<JS
-(function () {
-    var cfg = {$configJson};
-    var ctx = window.kloudstackObs || {};
-    var attempts = 0;
+        static $cached = null;
 
-    // Never throw into the page, but never fail invisibly either. An earlier version swallowed
-    // every error with a bare catch, which meant the SDK could fail to record anything while the
-    // console stayed clean — the one outcome an observability plugin must not have.
-    function fail(stage, err) {
-        ctx.error = { stage: stage, message: err && err.message ? err.message : String(err) };
-        if (window.console && window.console.error) {
-            window.console.error('[KloudStack Observability] ' + stage + ':', err);
+        if ($cached !== null) {
+            return $cached;
         }
+
+        $path = __DIR__ . '/snippet.js';
+
+        if (!is_readable($path)) {
+            return $cached = '';
+        }
+
+        $contents = file_get_contents($path); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+
+        return $cached = is_string($contents) ? $contents : '';
     }
 
-    function start() {
-        var sdk = window.Microsoft && window.Microsoft.ApplicationInsights;
+    /**
+     * The snippet's invocation object.
+     *
+     * onInit is why this is built here rather than encoded as JSON: it must be a function, and
+     * it is the supported hook for registering a telemetry initializer before the queued page
+     * view is flushed. The initializer stamps the server request's operation id onto browser
+     * telemetry, which is what makes a page view joinable to the request that produced it.
+     *
+     * It is guarded and returns true explicitly: the SDK drops an item when an initializer throws
+     * or returns false, so a fault in the code that adds correlation would silently destroy the
+     * telemetry it exists to enrich.
+     */
+    private static function loaderInvocation(string $source, string $configJson): string
+    {
+        $src = wp_json_encode($source, JSON_UNESCAPED_SLASHES);
 
-        if (!sdk) {
-            // The SDK loads async; retry briefly, then give up rather than polling forever.
-            if (++attempts < 100) {
-                window.setTimeout(start, 50);
-                return;
-            }
-
-            fail('sdk-load', new Error('Application Insights SDK did not load. Blocked by an ad blocker, CSP or network policy?'));
-            return;
-        }
-
-        var appInsights;
+        return <<<JS
+({
+    src: {$src},
+    crossOrigin: "anonymous",
+    cfg: {$configJson},
+    onInit: function (sdk) {
+        var ctx = window.kloudstackObs || {};
 
         try {
-            appInsights = new sdk.ApplicationInsights({ config: cfg });
-            appInsights.loadAppInsights();
-        } catch (e) {
-            fail('init', e);
-            return;
-        }
-
-        try {
-            appInsights.addTelemetryInitializer(function (item) {
-                /*
-                 * Guarded and explicitly truthy-returning.
-                 *
-                 * The SDK drops an item when an initializer throws OR returns false, so a fault
-                 * here silently destroys the telemetry it was meant to enrich. Correlation is
-                 * worth having; it is not worth losing the page view over.
-                 *
-                 * tags is deliberately not reassigned: ITelemetryItem.tags is typed Tags & Tags[]
-                 * and replacing it with a plain object can break the SDK's own serialisation.
-                 */
+            sdk.addTelemetryInitializer(function (item) {
                 try {
                     if (item && item.tags) {
                         if (ctx.operationId) {
-                            item.tags['ai.operation.id'] = ctx.operationId;
+                            item.tags["ai.operation.id"] = ctx.operationId;
                         }
                         if (ctx.parentId) {
-                            item.tags['ai.operation.parentId'] = ctx.parentId;
+                            item.tags["ai.operation.parentId"] = ctx.parentId;
                         }
                         if (ctx.role) {
-                            item.tags['ai.cloud.role'] = ctx.role;
+                            item.tags["ai.cloud.role"] = ctx.role;
                         }
                     }
                 } catch (e) {
-                    fail('initializer', e);
+                    if (window.console && window.console.error) {
+                        window.console.error("[KloudStack Observability] initializer:", e);
+                    }
                 }
 
                 return true;
             });
-        } catch (e) {
-            fail('add-initializer', e);
-        }
 
-        try {
-            appInsights.trackPageView();
+            ctx.ready = true;
         } catch (e) {
-            fail('track-page-view', e);
-        }
+            ctx.error = { stage: "add-initializer", message: e && e.message ? e.message : String(e) };
 
-        window.appInsights = appInsights;
-        ctx.ready = true;
+            if (window.console && window.console.error) {
+                window.console.error("[KloudStack Observability] add-initializer:", e);
+            }
+        }
     }
-
-    start();
-})();
+});
 JS;
     }
 }
