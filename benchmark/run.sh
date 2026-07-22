@@ -19,9 +19,14 @@ fi
 
 ROUNDS=8
 BLOCK=25
+SETUP_ONLY=0
 if [ "${1:-}" = "--quick" ]; then
     ROUNDS=2
     BLOCK=10
+    shift || true
+elif [ "${1:-}" = "--setup-only" ]; then
+    # Bring the environment up without measuring, for poking at it by hand.
+    SETUP_ONLY=1
     shift || true
 fi
 
@@ -118,8 +123,19 @@ docker compose run --rm cli eval '
 
 echo "==> environment"
 docker compose run --rm cli --info | grep -i "php version" || true
-docker compose exec -T wp sh -c 'php -r "echo \"fastcgi_finish_request: \", function_exists(\"fastcgi_finish_request\") ? \"present\" : \"ABSENT\", PHP_EOL;"'
+# Probed over HTTP, not with the `php` binary. The CLI SAPI genuinely has no
+# fastcgi_finish_request, so asking the binary prints a confident ABSENT about an environment
+# that is not the one under test.
+docker compose exec -T wp sh -c 'printf "%s" "<?php echo function_exists(\"fastcgi_finish_request\") ? \"present\" : \"ABSENT\", \" (\", PHP_SAPI, \")\";" > /var/www/html/bench-sapi.php'
+echo "fastcgi_finish_request: $(curl -fsS http://127.0.0.1:8099/bench-sapi.php || echo 'probe failed')"
+docker compose exec -T wp sh -c 'rm -f /var/www/html/bench-sapi.php'
 docker compose exec -T wp sh -c 'grep -E "^pm(\.|_)|^pm = " /usr/local/etc/php-fpm.d/*.conf 2>/dev/null | head -5' || true
+
+if [ "$SETUP_ONLY" = "1" ]; then
+    echo
+    echo "==> environment is up at http://127.0.0.1:8099 (sink control on :8098)"
+    exit 0
+fi
 
 echo
 echo "==> running benchmark (${ROUNDS} rounds x ${BLOCK} requests per scenario)"

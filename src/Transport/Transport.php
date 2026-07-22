@@ -92,9 +92,13 @@ final class Transport
             }
         }
 
-        $result = $this->dispatch($body, $headers);
+        // Timed because the breaker acts on slowness, not only on failure. This is the only place
+        // that knows how long a worker was held.
+        $startedAt  = microtime(true);
+        $result     = $this->dispatch($body, $headers);
+        $durationMs = (microtime(true) - $startedAt) * 1000;
 
-        return $this->handleResult($result, count($items));
+        return $this->handleResult($result, count($items), $durationMs);
     }
 
     /**
@@ -107,14 +111,15 @@ final class Transport
      *
      * @param array{status: int, error: string} $result
      */
-    private function handleResult(array $result, int $itemCount): bool
+    private function handleResult(array $result, int $itemCount, float $durationMs = 0.0): bool
     {
         $status = $result['status'];
         $error  = $result['error'];
 
-        // Accepted, including 206 partial success.
+        // Accepted, including 206 partial success. The duration decides whether this counts as a
+        // clean success or as a degradation signal — a 200 that took three seconds is not healthy.
         if ($status >= 200 && $status < 300) {
-            $this->breaker->recordSuccess();
+            $this->breaker->recordSuccess($durationMs);
 
             return true;
         }
@@ -139,7 +144,7 @@ final class Transport
             'items'  => $itemCount,
         ]);
 
-        $this->breaker->recordSuccess();
+        $this->breaker->recordSuccess($durationMs);
 
         return false;
     }

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Plugin Name: KloudStack benchmark probe
  * Description: Measurement support for the §6.1 latency benchmark. Never ships.
@@ -34,17 +35,24 @@ add_action(
     static function () {
         register_shutdown_function(
             static function () {
+                // sanitize_text_field rather than sanitize_key: the latter lowercases, and the
+                // scenario tags are single uppercase letters that the driver looks up by name.
                 $tag = isset($_SERVER['HTTP_X_BENCH_TAG'])
-                    ? preg_replace('/[^A-Za-z0-9_-]/', '', (string) $_SERVER['HTTP_X_BENCH_TAG'])
+                    ? sanitize_text_field(wp_unslash($_SERVER['HTTP_X_BENCH_TAG']))
                     : '';
 
-                if ($tag === '') {
+                $tag = preg_replace('/[^A-Za-z0-9_-]/', '', (string) $tag);
+
+                if ($tag === null || $tag === '') {
                     return;
                 }
 
                 // false, not true: real_usage reports memory in 8 MB allocator chunks, which
                 // cannot resolve the 1 MB budget being tested -- every scenario came back as
                 // exactly 8388608 bytes with a delta of zero.
+                // Direct filesystem call on purpose: WP_Filesystem is not initialised during
+                // shutdown, and this writes to the container's /tmp, not to the site.
+                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
                 @file_put_contents(
                     '/tmp/bench-mem.log',
                     $tag . ' ' . memory_get_peak_usage(false) . "\n",

@@ -294,8 +294,22 @@ final class Diagnostics
     {
         $breaker = new CircuitBreaker();
 
+        $failures = $breaker->failureCount();
+        $slow     = $breaker->slowCount();
+
         if (!$breaker->isOpen()) {
-            $failures = $breaker->failureCount();
+            if ($slow > 0) {
+                return self::result(
+                    'circuit_breaker',
+                    'Transmission',
+                    self::STATUS_WARN,
+                    sprintf(
+                        '%d recent slow transmission(s). The endpoint is responding, but slowly: %s.',
+                        $slow,
+                        $breaker->lastFailureReason()
+                    )
+                );
+            }
 
             if ($failures > 0) {
                 return self::result(
@@ -309,11 +323,18 @@ final class Diagnostics
             return self::result('circuit_breaker', 'Transmission', self::STATUS_PASS, 'No recent failures.');
         }
 
+        // Being unreachable and being slow are different problems with different fixes, and an
+        // administrator chasing "could not be reached" while the endpoint answers every time is
+        // being sent somewhere useless.
+        $cause = $slow >= $failures
+            ? 'the ingestion endpoint is responding too slowly, which ties up PHP workers'
+            : 'the ingestion endpoint could not be reached repeatedly';
+
         return self::result(
             'circuit_breaker',
             'Transmission',
             self::STATUS_FAIL,
-            'Suspended: the ingestion endpoint could not be reached repeatedly. Last error: '
+            'Suspended: ' . $cause . '. Last reason: '
             . ($breaker->lastFailureReason() ?: 'unknown')
             . '. Transmission resumes automatically within five minutes of the endpoint recovering.'
         );

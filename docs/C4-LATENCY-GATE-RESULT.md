@@ -62,15 +62,37 @@ handshake cost per send  : 41.92 ms
 ```
 
 `Transport::curl()` calls `curl_init()` and `curl_close()` per request, so every page view pays a
-fresh TCP connect and TLS handshake. PHP-FPM workers persist across requests, so a handle held in
-a static and reset with `curl_reset()` between uses would keep the connection alive and roughly
-halve the worker time each page view spends on telemetry.
+fresh TCP connect and TLS handshake.
 
-Against a sink on the same host this is 42 ms. Against Azure ingestion over the internet the
-handshake is a real round trip and the saving would be larger, so this figure is conservative.
+**The obvious fix does not exist.** This was first written up as "hold the handle in a static and
+reuse it, since FPM workers persist across requests". That is wrong. The worker *process*
+persists, but PHP destroys all user-land state between requests, so a static is empty again every
+time. Verified rather than assumed — a probe holding a cURL handle in a static, called 30 times
+over HTTP:
 
-Worth noting the trade-off honestly: a persistent handle must be keyed by endpoint, reset rather
-than reused blind, and tolerate a connection the far end has already dropped.
+```
+requests: 30      distinct workers: 16
+workers that served >1 request: 14
+handle_was_new on every request: True
+requests with a TLS handshake: 30 / 30
+  worker 1141 served 2x, handshake ms each time: [29.57, 20.65]
+```
+
+Fourteen workers served more than one request, and every one performed a fresh handshake. PHP
+exposes no persistent-connection API for cURL, so there is nothing to hold open.
+
+The 42 ms above was measured across 50 sends inside *one* PHP process — a situation that never
+arises in production, where a request sends exactly once. The cost is real; the saving was never
+available.
+
+What does reduce it:
+
+- **Sampling** — already implemented, and the only lever inside the plugin. At 20% sampling, one
+  page view in five pays a handshake.
+- **Batching outside the request** — many events per connection instead of one per page view. That
+  is the architectural change in Finding 4, and the only thing that removes this entirely.
+
+Findings 1 and 2 are therefore not two problems with two fixes. They are one problem with one fix.
 
 ## Finding 2 — releasing the response does not release the worker
 
@@ -100,9 +122,70 @@ a worker for three seconds, indefinitely, with no mitigation of any kind.
 Slow-but-working is what Azure throttling and regional latency actually look like — a far more
 likely production condition than a hard outage, and the only one the plugin has no answer for.
 
-Suggested fix: time each send and treat sustained slowness as a breaker signal — for example,
-open the breaker when the last N sends each exceed ~1 s. Small change, and it closes the gap
-using machinery that already exists.
+**Fixed.** `Transport` now times each send and hands the duration to the breaker, which treats a
+success slower than `SLOW_MS` (1 s) as a strike rather than as proof of health. A prompt success
+still clears state, so a recovered endpoint resumes immediately.
+
+## Finding 3a — the strike counter does not survive concurrency
+
+Found while verifying the fix above, and it predates all of this: after five concurrent slow sends
+the breaker had recorded **one** strike.
+
+The count lives in a transient, so it is a read-modify-write. Sixteen workers failing at the same
+instant each read the same value and each write back the same increment — sixteen bad sends, one
+strike. "Three consecutive failures" is really "three consecutive *waves*", and under high
+concurrency a wave can be a hundred requests. The undercount is worst exactly when the breaker
+matters most, because concurrency is what exhausts the pool in the first place.
+
+This also affected the pre-existing failure path, not only the new slow path.
+
+**Fixed**, by adding a second, independent reason to open: the breaker records when the current run
+of badness began, and any bad send observed more than `SUSTAINED_SECONDS` (5 s) after that opens it
+regardless of the count. Timestamps do not suffer the race — every worker computes the same answer
+from the same value without coordinating. The strike count is kept as the fast path for the
+serialised case; the clock is the backstop for the concurrent one.
+
+The decision is taken when a bad send is *observed*, never when state is read, so a single blip on
+a quiet site cannot age into an open breaker.
+
+## Verifying the breaker fixes — and why bench.py could not
+
+The interleaved benchmark **cannot** show whether these fixes work, and initially appeared to say
+they did not. It resets the breaker after every block and each block is shorter than the
+five-second sustained window, so a time-based protection never gets the chance to engage. Every
+scenario-C block of every recorded run sent telemetry on all 280 requests.
+
+It also produced a false positive in the other direction: C's Δp95 fell from +1713 ms to +936 ms
+after the fix, which looks like a 45% improvement. It is not. The baseline p95 in that run had
+itself drifted from 133 ms to 282 ms, and the delta shrank with it. B's Δp95 came out at **−110 ms**
+in the same run — the plugin apparently making the site faster — which is the giveaway.
+
+`sustained.py` measures the thing the gate actually cares about: one uninterrupted stretch of slow
+ingestion, breaker left alone, watching latency and telemetry volume *together*. Latency improving
+on its own would be suggestive; latency improving at the same instant telemetry stops is causal.
+
+60 s against a 3000 ms endpoint, baseline p50 91.7 ms / p95 241.6 ms:
+
+```
+      window   reqs    p50 ms    p95 ms  items sent
+   0-5  s       33     100.1    1625.6      27 (+27)
+   5-10 s       17     117.5    1395.1      48 (+21)
+  10-15 s       47      91.2     162.6      48 (+0)
+  20-25 s       50      90.0     148.8      48 (+0)
+  55-60 s       51      91.1     144.3      48 (+0)
+
+  breaker at end: {"failures":0,"slow":3,"since":...,"sustained":true,
+                   "reason":"slow endpoint: 3019 ms"}
+  495 requests issued, 48 sent telemetry
+  p50 after opening: 94.5 ms against a 91.7 ms baseline
+```
+
+The breaker opens at roughly ten seconds — five seconds of sustained badness, measured from the
+first slow send, which itself lands three seconds after the first request. Latency returns to
+baseline and stays there. Roughly 90% of sends are suppressed for the following five minutes.
+
+**Exposure is now bounded at about ten seconds instead of indefinite.** That is the whole change,
+and it is what makes §6.1 rewritable into something both honest and passing.
 
 ## Finding 4 — §6.1's wording cannot be satisfied in-process
 
@@ -112,10 +195,14 @@ No in-process sender can deliver this. Worker capacity is shared, so consuming i
 *some* effect on concurrent requests. The requirement as written is unachievable, which makes it
 useless as a gate — it can only ever be failed.
 
-The defensible version is narrower and is what the plugin actually delivers:
+The defensible version is narrower, and is now measured rather than asserted:
 
-> No effect on the response already in flight. Bounded effect on concurrent capacity, with the
-> circuit breaker limiting exposure to N failed or slow sends before telemetry is suspended.
+> No effect on the response already in flight. When ingestion degrades, elevated latency is
+> bounded to approximately ten seconds, after which telemetry is suspended for five minutes and
+> response times return to baseline.
+
+Every part of that is a number `sustained.py` reports, so it can be re-checked on demand instead
+of taken on trust.
 
 Anything stronger means taking the send out of the request lifecycle entirely — a queue drained
 by WP-Cron or an external worker — which is a materially bigger change than the two fixes above

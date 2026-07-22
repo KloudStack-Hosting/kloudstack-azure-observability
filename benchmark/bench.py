@@ -47,8 +47,9 @@ SCENARIOS = [
     ("D", "ingestion stalled (30 s)", True, 30000),
 ]
 
-# Must match CircuitBreaker::TRANSIENT.
+# Must match CircuitBreaker::TRANSIENT and CircuitBreaker::SLOW_MS.
 BREAKER_TRANSIENT = "kloudstack_obs_breaker"
+BREAKER_SLOW_MS = 1000
 
 # From spec §6.1. These are the gate.
 BUDGET_P95_MS = 5.0
@@ -230,9 +231,11 @@ def main():
             time.sleep(0.5)
             ingested[key] += sink("/state")["items"]
 
-            # Only the stalled scenario can trip the breaker, so it is reset here rather than
-            # before each block -- keeping the container churn out of every measured window.
-            if delay >= 10000:
+            # Reset after any block whose endpoint was slow enough to trip the breaker -- which
+            # since the slow-send fix means C as well as D, not D alone. Leaving C's trip in place
+            # would hand D an already-open breaker and make a suspended plugin look like a fast
+            # one. Done after the block so container churn stays out of the measured window.
+            if active and delay >= BREAKER_SLOW_MS:
                 reset_breaker()
 
             done += 1
