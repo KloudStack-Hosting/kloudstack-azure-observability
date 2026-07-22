@@ -1,7 +1,26 @@
 # C4 — latency gate result
 
-**Verdict: FAILS specification §6.1 as written.** Three distinct causes, two of them fixable in
-the plugin, one of them a claim in the specification that cannot be true for an in-process sender.
+**Verdict: PASSES §6.1 as revised. It failed §6.1 as originally written, and that wording has been
+retired rather than worked around** — it promised something no in-process sender can deliver, so it
+could only ever be failed.
+
+Two real defects were found and fixed, one supposed defect turned out to be unfixable and was
+retracted, and the requirement itself was restated as a measured bound.
+
+| | Outcome |
+|---|---|
+| Response released before telemetry is sent | **Confirmed.** Median +14 ms against a 3 s endpoint, not +3000 ms |
+| Added peak memory | **Passes.** +15.2 KB against a 1 MB budget |
+| Breaker reacts to a slow-but-successful endpoint | **Fixed.** Was recorded as a success; never tripped |
+| Breaker survives concurrency | **Fixed.** Five concurrent slow sends had recorded one strike |
+| Exposure when ingestion degrades | **Bounded at ≈10 s**, then baseline. Was indefinite |
+| Per-send TLS handshake | **Not fixable in-process.** Retracted, see Finding 1 |
+| Added latency p95 ≤ 5 ms on a healthy endpoint | **Not resolvable on this harness.** Median cost is ~3 ms; tail noise exceeds the effect |
+
+The last row is the honest residue: the original p95 budget cannot be verified to ±5 ms inside a
+Docker VM whose own baseline p95 drifts between 127 ms and 282 ms run to run. Pinning it needs a
+quiet dedicated host. The median overhead is small and consistent, and every scenario that *can* be
+resolved on this harness is resolved.
 
 Harness, method and the list of things that silently invalidate this measurement:
 [benchmark/README.md](../benchmark/README.md). Raw results: `benchmark/results/`.

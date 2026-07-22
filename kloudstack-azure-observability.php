@@ -4,7 +4,7 @@
  * Plugin Name:       KloudStack Observability for Azure
  * Plugin URI:        https://kloudstack.com.au/plugins/azure-observability/
  * Description:       Sends WordPress request, exception and browser telemetry to Azure Application Insights. Built for WordPress running on Azure.
- * Version:           2.0.0-dev
+ * Version:           2.0.0-rc1
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            KloudStack
@@ -23,7 +23,7 @@ namespace KloudStack\Observability;
 
 defined('ABSPATH') || exit;
 
-const VERSION        = '2.0.0-dev';
+const VERSION        = '2.0.0-rc1';
 const SCHEMA_VERSION = 1;
 const SLUG           = 'kloudstack-azure-observability';
 const PREFIX         = 'kloudstack_obs_';

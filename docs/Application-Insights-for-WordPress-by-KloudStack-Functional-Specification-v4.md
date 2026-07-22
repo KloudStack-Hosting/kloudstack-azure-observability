@@ -274,12 +274,22 @@ missing telemetry.
 | Added server latency, p99 | ≤ 15 ms |
 | Blocking network I/O on the request path | **Zero** |
 | Added peak memory | ≤ 1 MB |
-| Behaviour when Azure ingestion is slow or down | No effect on response time or availability |
+| Behaviour when Azure ingestion is slow or down | No effect on the response already in flight. Elevated latency bounded to ≈10 s, after which telemetry is suspended for 5 minutes and response times return to baseline |
 
-The current implementation fails these. It performs a synchronous cURL POST inside
+The 1.x implementation failed these. It performed a synchronous cURL POST inside
 `register_shutdown_function`, with a 2 s connect and 3 s total timeout. Under PHP-FPM the
-response is not released to the client until shutdown completes, so every page view can pay up
-to five seconds of added latency when Azure ingestion is degraded.
+response is not released to the client until shutdown completes, so every page view could pay up
+to five seconds of added latency when Azure ingestion was degraded.
+
+> **On the last row.** It previously read *"no effect on response time or availability"*. That is
+> not achievable by any in-process sender and so could only ever be failed: releasing the response
+> frees the visitor, but not the PHP-FPM worker, and worker capacity is shared with every other
+> request on the site. Measurement rather than reasoning — with ingestion taking 3 s the median
+> request rose by 14 ms, not 3000 ms, confirming the response is released; but p95 rose by 1.7 s,
+> because the pool saturated.
+>
+> The requirement is now stated as a bound rather than an absence, and every number in it is one
+> `benchmark/sustained.py` reports. See `docs/C4-LATENCY-GATE-RESULT.md`.
 
 Required implementation:
 

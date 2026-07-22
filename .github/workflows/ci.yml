@@ -85,16 +85,77 @@ jobs:
           echo "VERSION const : $const"
           echo "readme stable : $readme"
 
+          # Fail loudly if any extraction came back empty.
+          #
+          # Without this the job passes by comparing "" to "" the moment a grep stops matching --
+          # a renamed constant, a reformatted header, or grep -P being unavailable. It was found
+          # exactly that way: on a machine where -P is unsupported, all three variables were empty
+          # and every comparison "passed". A version check that silently verifies nothing is worse
+          # than no version check, because it is trusted.
+          for pair in "header:$header" "const:$const" "readme:$readme"; do
+            if [ -z "${pair#*:}" ]; then
+              echo "::error::Could not extract ${pair%%:*} version. The check cannot run, so it fails."
+              exit 1
+            fi
+          done
+
           if [ "$header" != "$const" ]; then
             echo "::error::Plugin header version ($header) does not match the VERSION constant ($const)."
             exit 1
           fi
 
-          # A -dev suffix is expected on main and is not required to appear in readme.txt.
-          if [ "${header%-dev}" = "$header" ] && [ "$header" != "$readme" ]; then
-            echo "::error::Plugin version ($header) does not match readme.txt stable tag ($readme)."
+          # Pre-release versions are not required to match readme.txt.
+          #
+          # WordPress.org's Stable tag must point at a *stable* release -- it is what users are
+          # served on update. A release candidate deliberately does not move it, so requiring
+          # header == stable tag would force us either to skip tagging RCs or to publish an RC to
+          # every existing install. Any semver pre-release suffix is exempt, not just -dev.
+          case "$header" in
+            *-dev|*-alpha*|*-beta*|*-rc*)
+              echo "Pre-release version; readme.txt stable tag intentionally left at $readme."
+              ;;
+            *)
+              if [ "$header" != "$readme" ]; then
+                echo "::error::Plugin version ($header) does not match readme.txt stable tag ($readme)."
+                exit 1
+              fi
+              ;;
+          esac
+
+  translations:
+    name: Translation template is current
+    runs-on: ubuntu-latest
+
+    # languages/*.pot is committed so translators can work from the repo. A committed artefact that
+    # nobody regenerates goes stale silently and every translation drifts with it, so the build
+    # regenerates it and fails if the result differs.
+    #
+    # NOTE: coverage is partial by design as of 2.0.0-rc1 -- Diagnostics and the SettingsPage
+    # toggle definitions are not yet wrapped. This job guards what IS extracted; it does not
+    # assert that everything user-facing is translatable. See docs/I18N.md.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate and compare
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD":/app -w /app --entrypoint wp wordpress:cli \
+            i18n make-pot . /tmp/regenerated.pot \
+            --slug=kloudstack-azure-observability \
+            --domain=kloudstack-azure-observability \
+            --exclude=vendor,tests,benchmark,docs,scripts,legacy,loader,node_modules \
+            --allow-root
+
+          # POT-Creation-Date changes on every run and says nothing about the content.
+          strip() { grep -v '^"POT-Creation-Date:' "$1"; }
+
+          if ! diff -u <(strip languages/kloudstack-azure-observability.pot) <(strip /tmp/regenerated.pot); then
+            echo "::error::languages/kloudstack-azure-observability.pot is out of date. Regenerate it:"
+            echo "  wp i18n make-pot . languages/kloudstack-azure-observability.pot --slug=kloudstack-azure-observability --domain=kloudstack-azure-observability --exclude=vendor,tests,benchmark,docs,scripts,legacy,loader,node_modules"
             exit 1
           fi
+
+          echo "Translation template is current."
 
   client-script:
     name: Rendered client script must parse as JavaScript
