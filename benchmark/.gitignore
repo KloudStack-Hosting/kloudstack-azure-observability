@@ -1,0 +1,3 @@
+sink/certs/
+results/*.tmp
+__pycache__/

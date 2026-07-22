@@ -1,0 +1,110 @@
+{
+  "generated": "2026-07-22T08:07:08+00:00",
+  "environment": {
+    "php": "8.3.32",
+    "sapi": "cli",
+    "opcache": "on",
+    "fpm_pool": "pm = static pm.max_children = 16",
+    "release_mechanism": "ABSENT",
+    "wordpress": "7.0.2"
+  },
+  "workload": "wordpress-core",
+  "path": "/",
+  "method": {
+    "rounds": 8,
+    "block": 25,
+    "warmup_per_block": 10,
+    "interleaved": true,
+    "samples_per_scenario": 200
+  },
+  "telemetry_items_received": {
+    "A": 0,
+    "B": 280,
+    "C": 280,
+    "D": 280
+  },
+  "scenarios": {
+    "A": {
+      "label": "baseline (plugin off)",
+      "plugin_active": false,
+      "sink_delay_ms": 5,
+      "telemetry_items": 0,
+      "n": 200,
+      "min": 57.12,
+      "p50": 71.74,
+      "p95": 133.29,
+      "p99": 207.51,
+      "max": 290.72,
+      "mean": 80.46,
+      "peak_memory_bytes": 5708080
+    },
+    "B": {
+      "label": "ingestion fast (5 ms)",
+      "plugin_active": true,
+      "sink_delay_ms": 5,
+      "telemetry_items": 280,
+      "n": 200,
+      "min": 61.48,
+      "p50": 74.46,
+      "p95": 184.54,
+      "p99": 266.23,
+      "max": 461.5,
+      "mean": 91.7,
+      "delta_p50": 2.72,
+      "delta_p95": 51.25,
+      "delta_p99": 58.72,
+      "peak_memory_bytes": 5723672,
+      "delta_memory_bytes": 15592
+    },
+    "C": {
+      "label": "ingestion slow (3000 ms)",
+      "plugin_active": true,
+      "sink_delay_ms": 3000,
+      "telemetry_items": 280,
+      "n": 200,
+      "min": 62.72,
+      "p50": 83.58,
+      "p95": 1846.62,
+      "p99": 2041.05,
+      "max": 2160.58,
+      "mean": 233.77,
+      "delta_p50": 11.84,
+      "delta_p95": 1713.33,
+      "delta_p99": 1833.54,
+      "peak_memory_bytes": 5723672,
+      "delta_memory_bytes": 15592
+    },
+    "D": {
+      "label": "ingestion stalled (30 s)",
+      "plugin_active": true,
+      "sink_delay_ms": 30000,
+      "telemetry_items": 280,
+      "n": 200,
+      "min": 61.16,
+      "p50": 83.22,
+      "p95": 3626.25,
+      "p99": 3944.83,
+      "max": 4122.22,
+      "mean": 391.07,
+      "delta_p50": 11.48,
+      "delta_p95": 3492.96,
+      "delta_p99": 3737.32,
+      "peak_memory_bytes": 5723672,
+      "delta_memory_bytes": 15592
+    }
+  },
+  "budget": {
+    "p95_ms": 5.0,
+    "p99_ms": 15.0,
+    "memory_bytes": 1048576
+  },
+  "failures": [
+    "B p95 +51.25 ms exceeds 5.0 ms",
+    "B p99 +58.72 ms exceeds 15.0 ms",
+    "C p95 +1713.33 ms exceeds 5.0 ms",
+    "C p99 +1833.54 ms exceeds 15.0 ms",
+    "D p95 +3492.96 ms exceeds 5.0 ms",
+    "D p99 +3737.32 ms exceeds 15.0 ms"
+  ],
+  "passed": false
+}

@@ -1,0 +1,112 @@
+# Benchmark environment for the §6.1 latency budget (release gate C4).
+#
+# Deliberately not run against a live Azure site. kloudstack.dev and kloudstack.com.au share a
+# single-worker P0v3 App Service Plan, so load-testing one degrades the other, and a shared
+# noisy plan cannot produce a trustworthy 5 ms measurement in any case.
+#
+# PHP-FPM is used rather than mod_php because fastcgi_finish_request() -- the mechanism the whole
+# latency guarantee rests on -- only exists under FPM. Benchmarking on mod_php would measure the
+# fallback path and quietly pass a gate the real deployment target never exercised.
+
+name: ksobs-bench
+
+services:
+  db:
+    image: mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: bench
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: wordpress
+    # The database lives in RAM. Disk I/O variance on a Windows bind mount is far larger than the
+    # 5 ms effect being measured and would swamp it.
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  sink:
+    image: python:3.12-alpine
+    volumes:
+      - ./sink:/sink:ro
+      - ./sink/certs:/certs:ro
+    command: ["python", "-u", "/sink/sink.py"]
+    ports:
+      # Control plane only. The ingestion port is reached from the wp container over the compose
+      # network, so it is not published.
+      - "127.0.0.1:8098:8098"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8098/state').read()"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  wp:
+    # Built rather than pulled, only to widen the PHP-FPM worker pool. See wp/Dockerfile.
+    build: ./wp
+    image: ksobs-bench-wp:php8.3-fpm
+    depends_on:
+      db:
+        condition: service_healthy
+      sink:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      # The connection string is NOT set here. WORDPRESS_CONFIG_EXTRA looks like it would work,
+      # but wp-config.php evaluates it by calling getenv() at request time -- and PHP-FPM
+      # defaults to clear_env=yes, so a worker never sees it. The constant silently never gets
+      # defined, the plugin sits unconfigured, and the benchmark cheerfully measures the overhead
+      # of a plugin that is doing nothing. run.sh writes the constant into wp-config.php with
+      # `wp config set` instead, which does not depend on the worker environment.
+      #
+      # This is specific to the official Docker image. On App Service, application settings do
+      # reach PHP, which is why the environment-variable path works there.
+      WORDPRESS_DEBUG: ""
+    volumes:
+      - wp:/var/www/html
+      # Read-only: the benchmark must never be able to modify the code it is measuring.
+      - ../:/plugin-src:ro
+      - ./probes:/probes:ro
+      # Transport sends with raw cURL and CURLOPT_SSL_VERIFYPEER => true, bypassing
+      # wp_remote_post and therefore every WordPress HTTP filter. The sink's certificate has to be
+      # genuinely trusted by the container; there is no filter that can wave it through, and
+      # turning verification off would stop the benchmark exercising the real transport.
+      - ./sink/certs:/certs:ro
+
+  web:
+    image: nginx:alpine
+    depends_on:
+      - wp
+    ports:
+      - "127.0.0.1:8099:80"
+    volumes:
+      - wp:/var/www/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+  cli:
+    image: wordpress:cli-php8.3
+    depends_on:
+      db:
+        condition: service_healthy
+    # The CLI image runs as uid 33 (www-data) to match file ownership in the shared volume.
+    user: "33:33"
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - wp:/var/www/html
+      - ../:/plugin-src:ro
+      - ./probes:/probes:ro
+    entrypoint: ["wp"]
+    command: ["--info"]
+
+volumes:
+  wp:

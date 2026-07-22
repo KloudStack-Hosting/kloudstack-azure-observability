@@ -94,6 +94,7 @@ jobs:
             --exclude 'legacy' \
             --exclude 'loader' \
             --exclude 'scripts' \
+            --exclude 'benchmark' \
             --exclude '.gitattributes' \
             --exclude '.gitignore' \
             --exclude 'composer.json' \
@@ -109,7 +110,7 @@ jobs:
             --exclude '.DS_Store'
 
           # Fail loudly rather than shipping internal planning documents or dev tooling.
-          for forbidden in docs tests vendor legacy .github composer.json phpunit.xml; do
+          for forbidden in docs tests vendor legacy benchmark .github composer.json phpunit.xml; do
             if [ -e "build/${slug}/${forbidden}" ]; then
               echo "::error::${forbidden} must not be in the distributed package."
               exit 1
