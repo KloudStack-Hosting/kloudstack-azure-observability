@@ -95,3 +95,27 @@ jobs:
             echo "::error::Plugin version ($header) does not match readme.txt stable tag ($readme)."
             exit 1
           fi
+
+  client-script:
+    name: Rendered client script must parse as JavaScript
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      # The inline script is assembled from Microsoft's loader snippet plus a generated
+      # invocation. PHP linting cannot see it -- the output is JavaScript -- and a syntax error
+      # there kills the whole block silently: no telemetry, no server-side symptom, nothing but a
+      # console error on the visitor's browser. A shipped build did exactly that.
+      - name: Render and parse
+        run: |
+          set -euo pipefail
+          php scripts/render-client-script.php > /tmp/client.js
+          echo "rendered $(wc -c < /tmp/client.js) bytes"
+          node --check /tmp/client.js
+          echo "Rendered client script parses."
