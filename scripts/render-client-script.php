@@ -26,7 +26,7 @@ $configJson = json_encode([
 $context = json_encode([
     'operationId' => '4bf92f3577b34da6a3ce929d0e0e4736',
     'parentId'    => '00f067aa0ba902b7',
-    'role'        => 'kloudstacklabs-web',
+    'role'        => 'example-site',
 ], JSON_UNESCAPED_SLASHES);
 
 $src = json_encode('https://js.monitor.azure.com/scripts/b/ai.3.gbl.min.js', JSON_UNESCAPED_SLASHES);
