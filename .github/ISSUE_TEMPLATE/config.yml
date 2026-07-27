@@ -1,0 +1,15 @@
+# Keep the "Open a blank issue" escape hatch off, so reports arrive with the
+# information the templates ask for rather than as free text with none of it.
+blank_issues_enabled: false
+contact_links:
+  - name: KloudStack managed hosting support
+    url: https://kloudstack.com.au
+    about: >-
+      Running this on a KloudStack-managed WordPress stack? Telemetry there is
+      configured and updated for you — contact KloudStack support rather than
+      opening an issue here.
+  - name: Security vulnerability
+    url: https://github.com/KloudStack-Hosting/kloudstack-azure-observability/security/advisories/new
+    about: >-
+      Please report security issues privately, never as a public issue. See
+      SECURITY.md.

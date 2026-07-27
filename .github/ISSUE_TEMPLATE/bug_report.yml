@@ -1,0 +1,78 @@
+name: Bug report
+description: Something isn't working — telemetry missing, an error, unexpected behaviour.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Thanks for reporting. The single most useful thing you can attach is the
+        plugin's own self-test: **Tools → KloudStack Observability → Run self-test**,
+        then **Copy report**. It captures versions, the release mechanism, and the
+        transmission state, and it is scrubbed of secrets.
+
+  - type: textarea
+    id: selftest
+    attributes:
+      label: Self-test report
+      description: Tools → KloudStack Observability → Run self-test → Copy report. Paste it here.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: false
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      description: From the Plugins screen, or the self-test report.
+    validations:
+      required: true
+
+  - type: input
+    id: hosting
+    attributes:
+      label: Azure hosting type
+      description: App Service (Linux/Windows), Container Apps, AKS, VM, or other.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: component-type
+    attributes:
+      label: Application Insights component type
+      description: >-
+        In the Azure portal, the component's Overview shows whether it is
+        workspace-based. Classic components silently drop browser telemetry.
+      options:
+        - Not sure
+        - Workspace-based
+        - Classic
+    validations:
+      required: false
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console errors
+      description: If browser/page-view telemetry is the problem, paste any console errors.
+      render: text
+    validations:
+      required: false
