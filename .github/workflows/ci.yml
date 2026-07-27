@@ -139,8 +139,13 @@ jobs:
       - name: Regenerate and compare
         run: |
           set -euo pipefail
+
+          # Write the regenerated template INTO the mounted workspace, not the container's /tmp.
+          # The container is --rm, so a file it writes to its own /tmp vanishes when it exits, and
+          # the diff below -- which runs on the host -- would then compare against a missing file
+          # and fail every single time, no matter whether the committed .pot is actually current.
           docker run --rm -v "$PWD":/app -w /app --entrypoint wp wordpress:cli \
-            i18n make-pot . /tmp/regenerated.pot \
+            i18n make-pot . .regenerated.pot \
             --slug=kloudstack-azure-observability \
             --domain=kloudstack-azure-observability \
             --exclude=vendor,tests,benchmark,docs,scripts,legacy,loader,node_modules \
@@ -149,12 +154,14 @@ jobs:
           # POT-Creation-Date changes on every run and says nothing about the content.
           strip() { grep -v '^"POT-Creation-Date:' "$1"; }
 
-          if ! diff -u <(strip languages/kloudstack-azure-observability.pot) <(strip /tmp/regenerated.pot); then
+          if ! diff -u <(strip languages/kloudstack-azure-observability.pot) <(strip .regenerated.pot); then
             echo "::error::languages/kloudstack-azure-observability.pot is out of date. Regenerate it:"
             echo "  wp i18n make-pot . languages/kloudstack-azure-observability.pot --slug=kloudstack-azure-observability --domain=kloudstack-azure-observability --exclude=vendor,tests,benchmark,docs,scripts,legacy,loader,node_modules"
+            rm -f .regenerated.pot
             exit 1
           fi
 
+          rm -f .regenerated.pot
           echo "Translation template is current."
 
   client-script:
