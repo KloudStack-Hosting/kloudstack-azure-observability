@@ -17,15 +17,13 @@ Monitor workbooks bind to.
 
 ## Status
 
-> **This repository is private.** It must stay private until the internal planning documents in
-> [`docs/`](docs/README.md) are removed from git history. See [`docs/README.md`](docs/README.md)
-> for the sequence to follow before making it public.
+**Release candidate — `2.0.0-rc1`.** The plugin collects and transmits request, exception and
+browser telemetry end to end, with a settings screen, a diagnostics self-test and Site Health
+integration. It has been verified on a live Azure site, and the latency budget that gates
+release is met and recorded — see [`docs/C4-LATENCY-GATE-RESULT.md`](docs/C4-LATENCY-GATE-RESULT.md).
 
-**Pre-release — Phases A to E complete.** The plugin collects and transmits telemetry end to
-end, and has a settings screen, a diagnostics self-test and Site Health integration.
-
-Not yet done: integration testing inside a real WordPress install, the latency benchmark that
-gates release, and WordPress.org submission. See [`CHANGELOG.md`](CHANGELOG.md).
+Remaining before `2.0.0`: WordPress.org review, and completing translation coverage
+(see [`docs/I18N.md`](docs/I18N.md)). Progress is tracked in [`CHANGELOG.md`](CHANGELOG.md).
 
 The 1.x source, which shipped inside the KloudStack WordPress image, is retained under
 [`legacy/`](legacy/) for reference and is not maintained.
@@ -35,10 +33,8 @@ The 1.x source, which shipped inside the KloudStack WordPress image, is retained
 | Document | Purpose |
 |---|---|
 | [Functional Specification v4](docs/Application-Insights-for-WordPress-by-KloudStack-Functional-Specification-v4.md) | What the plugin does, scope, privacy, telemetry schema contract |
-| [Implementation Plan](docs/KloudStack-WordPress-Plugin-Implementation-Plan.md) | Repository, code design, phased work breakdown, release engineering |
-| [Marketplace Implementation](docs/KloudStack-WordPress-Observability-Azure-Marketplace-Implementation.md) | The companion Azure Marketplace Solution Template offer |
-
-Specification v3 is superseded and retained only as history.
+| [Latency gate result](docs/C4-LATENCY-GATE-RESULT.md) | The §6.1 performance budget, how it is measured, and the result |
+| [Translations](docs/I18N.md) | Translation template, coverage, and how to regenerate it |
 
 ## Requirements
 
