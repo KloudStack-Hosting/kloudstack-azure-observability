@@ -140,29 +140,35 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Write the regenerated template INTO the mounted workspace, not the container's /tmp.
-          # The container is --rm, so a file it writes to its own /tmp vanishes when it exits, and
-          # the diff below -- which runs on the host -- would then compare against a missing file
-          # and fail every single time, no matter whether the committed .pot is actually current.
-          docker run --rm -v "$PWD":/app -w /app --entrypoint wp wordpress:cli \
-            i18n make-pot . .regenerated.pot \
-            --slug=kloudstack-azure-observability \
-            --domain=kloudstack-azure-observability \
-            --exclude=vendor,tests,benchmark,docs,scripts,legacy,loader,node_modules \
-            --allow-root
+          # Everything runs INSIDE the container, deliberately.
+          #
+          # Two earlier attempts each failed on the host/container boundary: writing the
+          # regenerated template to the container's own /tmp and then diffing it on the host (the
+          # file is gone with the --rm container); and writing it into the mounted workspace, which
+          # the container's non-root user cannot write to because the checkout is owned by the
+          # runner user. Doing the whole compare in the container sidesteps both -- it writes only
+          # to /tmp (always writable), reads the committed template through the read-only mount,
+          # and diffs plain files so it does not depend on the shell supporting process
+          # substitution.
+          docker run --rm -v "$PWD":/app -w /app --entrypoint sh wordpress:cli -c '
+            set -e
+            wp i18n make-pot . /tmp/regenerated.pot \
+              --slug=kloudstack-azure-observability \
+              --domain=kloudstack-azure-observability \
+              --exclude=vendor,tests,benchmark,docs,scripts,legacy,loader,node_modules \
+              --allow-root
 
-          # POT-Creation-Date changes on every run and says nothing about the content.
-          strip() { grep -v '^"POT-Creation-Date:' "$1"; }
+            # POT-Creation-Date changes on every run and says nothing about the content.
+            grep -v "^\"POT-Creation-Date:" languages/kloudstack-azure-observability.pot > /tmp/committed.stripped
+            grep -v "^\"POT-Creation-Date:" /tmp/regenerated.pot > /tmp/regenerated.stripped
 
-          if ! diff -u <(strip languages/kloudstack-azure-observability.pot) <(strip .regenerated.pot); then
-            echo "::error::languages/kloudstack-azure-observability.pot is out of date. Regenerate it:"
-            echo "  wp i18n make-pot . languages/kloudstack-azure-observability.pot --slug=kloudstack-azure-observability --domain=kloudstack-azure-observability --exclude=vendor,tests,benchmark,docs,scripts,legacy,loader,node_modules"
-            rm -f .regenerated.pot
-            exit 1
-          fi
+            if ! diff -u /tmp/committed.stripped /tmp/regenerated.stripped; then
+              echo "::error::languages/kloudstack-azure-observability.pot is out of date. Regenerate it: wp i18n make-pot . languages/kloudstack-azure-observability.pot --slug=kloudstack-azure-observability --domain=kloudstack-azure-observability --exclude=vendor,tests,benchmark,docs,scripts,legacy,loader,node_modules"
+              exit 1
+            fi
 
-          rm -f .regenerated.pot
-          echo "Translation template is current."
+            echo "Translation template is current."
+          '
 
   client-script:
     name: Rendered client script must parse as JavaScript
