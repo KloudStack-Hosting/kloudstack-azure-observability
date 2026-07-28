@@ -104,6 +104,8 @@ jobs:
             --exclude 'phpunit.xml' \
             --exclude 'README.md' \
             --exclude 'CHANGELOG.md' \
+            --exclude 'CONTRIBUTING.md' \
+            --exclude 'SECURITY.md' \
             --exclude '.phpunit.result.cache' \
             --exclude '.phpcs-cache' \
             --exclude '*.zip' \
