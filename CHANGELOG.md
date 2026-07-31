@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 The telemetry schema is versioned independently — see the functional specification, section 8.
 
+## [2.0.0-rc2]
+
+### Changed
+- **MU-loader (2.1.0) now respects the WordPress activation state.** It boots the plugin at
+  must-use priority only when the plugin is active, so activation and deactivation behave exactly
+  as they do for any plugin — a site owner or KloudStack can turn observability off from the
+  Plugins screen and it genuinely stops. Earlier the loader booted unconditionally, which removed
+  that control. An active plugin still gets the early-load benefit (catching fatals raised while
+  other plugins load). The KloudStack image activates the plugin once on first deploy so it is on
+  by default. Plugin code is unchanged from rc1.
+
 ## [Unreleased] — 2.0.0
 
 First public release. A rewrite of the 1.x MU-plugin, extracted from the KloudStack WordPress

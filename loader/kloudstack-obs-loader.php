@@ -2,8 +2,8 @@
 
 /**
  * Plugin Name: KloudStack Observability Loader
- * Description: Loads KloudStack Observability for Azure at MU priority on KloudStack managed stacks.
- * Version:     2.0.0
+ * Description: Boots KloudStack Observability for Azure at MU priority when it is active.
+ * Version:     2.1.0
  * Author:      KloudStack
  *
  * Deployed to wp-content/mu-plugins/ by the KloudStack WordPress image. This is the only
@@ -13,6 +13,11 @@
  * Loading at MU priority is not cosmetic: it is what allows the exception collector to capture
  * fatal errors raised while regular plugins load. A standard plugin cannot do that.
  *
+ * It boots the plugin ONLY when the plugin is active in WordPress. Activation and deactivation
+ * therefore behave exactly as they do for any plugin — a site owner (or KloudStack) can turn
+ * observability off from the Plugins screen and it genuinely stops — while an active plugin still
+ * gets the early-load benefit. Earlier versions booted unconditionally, which removed that control.
+ *
  * @package KloudStack\Observability
  */
 
@@ -21,14 +26,16 @@ declare(strict_types=1);
 defined('ABSPATH') || exit;
 
 (static function (): void {
-    $plugin = WP_PLUGIN_DIR . '/kloudstack-azure-observability/kloudstack-azure-observability.php';
+    $plugin   = WP_PLUGIN_DIR . '/kloudstack-azure-observability/kloudstack-azure-observability.php';
+    $basename = 'kloudstack-azure-observability/kloudstack-azure-observability.php';
 
     if (!is_readable($plugin)) {
         return;
     }
 
     /*
-     * Remove the legacy 1.x MU-plugin if the image upgrade left it behind.
+     * Remove the legacy 1.x MU-plugin if the image upgrade left it behind. Done regardless of the
+     * new plugin's activation state — a stray 1.x would double telemetry whether or not 2.x runs.
      *
      * Both versions register their own shutdown handler, so leaving 1.x in place would double
      * every request's telemetry — and double the customer's ingestion cost — while looking
@@ -45,6 +52,22 @@ defined('ABSPATH') || exit;
         } else {
             @unlink($legacy); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
         }
+    }
+
+    /*
+     * Respect the WordPress activation state. mu-plugins load before regular plugins, but the
+     * options table is already available, so active_plugins can be read here. If the plugin has
+     * been deactivated from the Plugins screen, do nothing — WordPress will not load it either,
+     * so observability is genuinely off until it is reactivated.
+     */
+    if (!function_exists('get_option')) {
+        return;
+    }
+
+    $active = (array) get_option('active_plugins', array());
+
+    if (!in_array($basename, $active, true)) {
+        return;
     }
 
     // Tell the bootstrap not to self-register on plugins_loaded; we boot it directly below.
