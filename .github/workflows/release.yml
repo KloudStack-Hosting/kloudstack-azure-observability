@@ -233,8 +233,9 @@ jobs:
             echo "### Before installing on a stack running 1.x"
             echo ""
             echo "The 1.x plugin is a must-use plugin and cannot be deactivated from the admin."
-            echo "Rename \`wp-content/mu-plugins/kloudstack-appinsights.php\` to \`.disabled\` via Kudu first,"
-            echo "or both versions collect and Azure ingestion is charged twice."
+            echo "**Delete** \`wp-content/mu-plugins/kloudstack-appinsights.php\` via Kudu first"
+            echo "(renaming it to \`.disabled\` also works, but removing it is cleaner) —"
+            echo "otherwise both versions collect and Azure ingestion is charged twice."
             echo ""
             echo "After activating you should see **KloudStack Observability for Azure** in the plugin"
             echo "list and a **Tools → KloudStack Observability** menu. Then run the self-test."
@@ -263,8 +264,9 @@ jobs:
             ### Before installing on a stack running 1.x
 
             The 1.x plugin is a must-use plugin and cannot be deactivated from the WordPress
-            admin. Rename `wp-content/mu-plugins/kloudstack-appinsights.php` first, or both
-            versions will collect telemetry and Azure ingestion will be charged twice.
+            admin. **Delete** `wp-content/mu-plugins/kloudstack-appinsights.php` first (renaming
+            it to `.disabled` also works, but removing it is cleaner) — otherwise both versions
+            will collect telemetry and Azure ingestion will be charged twice.
 
             Verify the download:
 
