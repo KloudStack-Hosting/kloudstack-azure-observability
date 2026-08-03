@@ -95,6 +95,8 @@ jobs:
             --exclude 'loader' \
             --exclude 'scripts' \
             --exclude 'benchmark' \
+            --exclude 'Screenshot' \
+            --exclude '.wordpress-org' \
             --exclude '.gitattributes' \
             --exclude '.gitignore' \
             --exclude 'composer.json' \

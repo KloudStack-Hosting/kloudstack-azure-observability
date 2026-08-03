@@ -45,6 +45,12 @@ released to the visitor, so Application Insights latency or availability never a
 site's response time. A circuit breaker suspends transmission if the ingestion endpoint becomes
 unreachable.
 
+= Trademarks =
+
+Azure, Microsoft Azure and Application Insights are trademarks of the Microsoft group of
+companies. This is an independent plugin and is not affiliated with, endorsed by, or sponsored
+by Microsoft.
+
 == External services ==
 
 This plugin sends data to Microsoft Azure Application Insights, a third-party service operated
@@ -107,6 +113,11 @@ request telemetry is produced — while the browser SDK still fires. This is exp
 
 Yes. Each site reports a distinct cloud role name, derived from the Azure site name or set
 manually in settings.
+
+== Screenshots ==
+
+1. Settings — connection, telemetry, privacy and advanced controls in one screen. On Azure the connection string is read from the hosting environment and shown read-only.
+2. The built-in diagnostics self-test — checks configuration, the Azure environment, outbound connectivity and a live round-trip to Azure through the real transport path, with a copy-paste report for support.
 
 == Changelog ==
 
