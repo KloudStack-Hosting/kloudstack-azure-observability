@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 
 The telemetry schema is versioned independently — see the functional specification, section 8.
 
+## [2.0.0-rc3]
+
+### Fixed
+- **"Debug log" is no longer a dead toggle.** The setting is now bridged to the `kloudstack_obs_debug_log`
+  filter in `Plugin::boot()`, so enabling it (with `WP_DEBUG`) actually writes the debug log; previously
+  the option saved but never took effect.
+- **"Serve the JavaScript SDK locally" now works.** Microsoft's Application Insights JS SDK (Web 3.4.3, MIT)
+  is bundled at `src/Client/assets/`. Previously the option pointed at a missing file, so enabling it under a
+  strict Content Security Policy broke browser telemetry.
+
+### Changed
+- **The duplicate-instrumentation self-test is now actionable** — it names how to disable the App Service
+  Application Insights auto-instrumentation extension (keeping the connection string) rather than just
+  "remove one of them".
+- **The header-collection setting is relabelled** to "Collect browser request and response headers" — it only
+  drives the browser SDK's AJAX/fetch header tracking; there is no server-side header capture. Sensitive
+  query-parameter redaction remains always-on.
+- Plugin URI now points at the public GitHub repository.
+
+### Tests
+- Added coverage for excluded-path matching (`RequestCollector::matchesUserPattern`) and the `Log::enabled()`
+  gate.
+
 ## [2.0.0-rc2]
 
 ### Changed
