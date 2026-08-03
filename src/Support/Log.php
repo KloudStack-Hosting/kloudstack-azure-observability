@@ -72,7 +72,15 @@ final class Log
      */
     private static function write(string $level, string $message, array $context): void
     {
-        if (!self::enabled() || !defined('WP_CONTENT_DIR')) {
+        if (!self::enabled() || !function_exists('wp_upload_dir')) {
+            return;
+        }
+
+        // Write to the uploads directory — not a hard-coded wp-content path (the WordPress.org
+        // Plugin Check requires wp_upload_dir() for file writes) and never the plugin folder,
+        // which is deleted on upgrade.
+        $uploads = wp_upload_dir();
+        if (!is_array($uploads) || !empty($uploads['error']) || empty($uploads['basedir'])) {
             return;
         }
 
@@ -85,6 +93,6 @@ final class Log
         );
 
         // Errors here are deliberately ignored — a failed debug write must never escalate.
-        @file_put_contents(WP_CONTENT_DIR . '/' . self::FILENAME, $line, FILE_APPEND | LOCK_EX);
+        @file_put_contents((string) $uploads['basedir'] . '/' . self::FILENAME, $line, FILE_APPEND | LOCK_EX); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
     }
 }

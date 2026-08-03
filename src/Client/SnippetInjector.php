@@ -222,11 +222,13 @@ final class SnippetInjector
     {
         $src = wp_json_encode($source, JSON_UNESCAPED_SLASHES);
 
-        return <<<JS
-({
-    src: {$src},
+        // Built by concatenation rather than a heredoc: the WordPress.org Plugin Check disallows
+        // heredoc/nowdoc syntax. $src and $configJson are already JSON-encoded; the rest is a static
+        // template containing only double-quoted JS strings, so a single-quoted PHP string is exact.
+        return '({
+    src: ' . $src . ',
     crossOrigin: "anonymous",
-    cfg: {$configJson},
+    cfg: ' . $configJson . ',
     onInit: function (sdk) {
         var ctx = window.kloudstackObs || {};
 
@@ -262,7 +264,6 @@ final class SnippetInjector
             }
         }
     }
-});
-JS;
+})';
     }
 }
