@@ -95,6 +95,11 @@ final class Plugin
         $this->booted = true;
 
         Guard::run(function (): void {
+            // Bridge the saved 'debug_log' option to the filter Log::enabled() reads. This MUST run
+            // before anything logs, because Log memoises enabled() on first use — without it the
+            // "Debug log" settings toggle writes its option but never actually enables logging.
+            add_filter('kloudstack_obs_debug_log', fn (): bool => $this->settings->bool('debug_log'));
+
             $this->loadTextDomain();
             $this->registerAdmin();
 
