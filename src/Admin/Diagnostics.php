@@ -346,6 +346,7 @@ final class Diagnostics
     private function checkDuplicateInstrumentation(): array
     {
         $conflicts = [];
+        $fixes = [];
 
         /*
          * The KloudStack 1.x must-use plugin. Checked first because on a KloudStack stack it is
@@ -358,12 +359,20 @@ final class Diagnostics
          */
         if (defined('WPMU_PLUGIN_DIR') && file_exists(WPMU_PLUGIN_DIR . '/kloudstack-appinsights.php')) {
             $conflicts[] = 'the KloudStack 1.x must-use plugin (wp-content/mu-plugins/kloudstack-appinsights.php)';
+            $fixes[]     = 'delete wp-content/mu-plugins/kloudstack-appinsights.php';
         }
 
         $agent = getenv(self::APP_SERVICE_AGENT);
 
         if (is_string($agent) && $agent !== '' && $agent !== '~0' && strtolower($agent) !== 'disabled') {
             $conflicts[] = 'the App Service Application Insights extension';
+            // The single most common cause for a self-hosted (non-KloudStack) site: the customer
+            // enabled Azure's App Service "Application Insights" integration, which turns on its own
+            // auto-instrumentation agent as well as writing the connection string this plugin uses.
+            $fixes[]     = 'turn off the App Service "Application Insights" auto-instrumentation '
+                . '(Azure portal: App Service → Application Insights → Disable, or set the '
+                . 'ApplicationInsightsAgent_EXTENSION_VERSION app setting to "disabled") and keep the '
+                . 'connection string';
         }
 
         if ($conflicts === []) {
@@ -382,8 +391,10 @@ final class Diagnostics
             // being charged twice for ingestion, and the resulting counts are wrong.
             self::STATUS_FAIL,
             'Also collecting telemetry: ' . implode(' and ', $conflicts) . '. '
-            . 'Every request is recorded twice, Azure ingestion is charged twice, and request '
-            . 'counts and percentiles will be wrong. Remove one of them.'
+            . 'Every request is then recorded twice, so Azure ingestion is billed twice and request '
+            . 'counts and percentiles are wrong. Keep only one collector — this plugin adds '
+            . 'WordPress-aware detail, so we recommend keeping it and turning off the other: '
+            . implode('; ', $fixes) . '.'
         );
     }
 
