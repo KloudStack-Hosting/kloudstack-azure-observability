@@ -192,6 +192,6 @@ msgstr ""
 msgid "Telemetry configuration and health. Contains no credentials."
 msgstr ""
 
-#: src/Plugin.php:260
+#: src/Plugin.php:265
 msgid "KloudStack Observability for Azure is active but has no Application Insights connection string, so no telemetry is being collected."
 msgstr ""
