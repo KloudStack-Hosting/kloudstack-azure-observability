@@ -100,7 +100,6 @@ final class Plugin
             // "Debug log" settings toggle writes its option but never actually enables logging.
             add_filter('kloudstack_obs_debug_log', fn (): bool => $this->settings->bool('debug_log'));
 
-            $this->loadTextDomain();
             $this->registerAdmin();
 
             if (!$this->config->isConfigured()) {
@@ -117,15 +116,6 @@ final class Plugin
 
             $this->registerCollectors();
         }, 'plugin.boot');
-    }
-
-    private function loadTextDomain(): void
-    {
-        load_plugin_textdomain(
-            SLUG,
-            false,
-            dirname(plugin_basename(PLUGIN_FILE)) . '/languages'
-        );
     }
 
     /**

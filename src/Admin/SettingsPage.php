@@ -258,6 +258,7 @@ final class SettingsPage
 
     private function renderNotices(): void
     {
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only display flag: isset() only, the value is never read or used to process data.
         if (isset($_GET['kloudstack_obs_saved'])) {
             echo '<div class="notice notice-success is-dismissible"><p>'
                 . esc_html__('Settings saved.', 'kloudstack-azure-observability')

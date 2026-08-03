@@ -15,18 +15,16 @@ defined('ABSPATH') || exit;
  * after the response has been released to the visitor, behind a circuit breaker.
  *
  * The HTTP call is injectable so the batching, encoding and failure-classification logic can be
- * unit tested without a network. The default sender uses cURL directly rather than
- * wp_remote_post, because by the time this runs the response is already closed and WordPress's
- * HTTP stack carries filter overhead and third-party filters that have no business running
- * against a telemetry endpoint.
+ * unit tested without a network. The default sender uses wp_remote_post (the WordPress HTTP API);
+ * it runs after the response has already been released to the visitor, so its overhead is off the
+ * critical path, and the circuit breaker bounds any worker time it costs.
  */
 final class Transport
 {
     /** Payloads above this size are compressed. Below it, gzip costs more than it saves. */
     private const GZIP_THRESHOLD = 1024;
 
-    private const CONNECT_TIMEOUT = 2;
-    private const TOTAL_TIMEOUT   = 5;
+    private const TOTAL_TIMEOUT = 5;
 
     /** @var string */
     private $endpoint;
@@ -165,46 +163,43 @@ final class Transport
             ];
         }
 
-        return $this->curl($body, $headers);
+        return $this->remote($body, $headers);
     }
 
     /**
-     * @param array<int, string> $headers
+     * @param array<int, string> $headers Numeric "Header: value" list.
      *
      * @return array{status: int, error: string}
      */
-    private function curl(string $body, array $headers): array
+    private function remote(string $body, array $headers): array
     {
-        if (!function_exists('curl_init')) {
-            return ['status' => 0, 'error' => 'curl unavailable'];
+        // wp_remote_post wants an associative header map; convert the "Header: value" list.
+        $mapped = [];
+        foreach ($headers as $header) {
+            $parts = explode(':', $header, 2);
+            if (count($parts) === 2) {
+                $mapped[trim($parts[0])] = trim($parts[1]);
+            }
         }
 
-        $handle = curl_init($this->endpoint);
-
-        if ($handle === false) {
-            return ['status' => 0, 'error' => 'curl_init failed'];
-        }
-
-        curl_setopt_array($handle, [
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => $body,
-            CURLOPT_HTTPHEADER     => $headers,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => self::CONNECT_TIMEOUT,
-            CURLOPT_TIMEOUT        => self::TOTAL_TIMEOUT,
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_SSL_VERIFYHOST => 2,
+        $response = wp_remote_post($this->endpoint, [
+            'body'        => $body,
+            'headers'     => $mapped,
+            'timeout'     => self::TOTAL_TIMEOUT,
             // Telemetry must never follow a redirect: an ingestion endpoint does not redirect,
             // and following one would send the payload somewhere unintended.
-            CURLOPT_FOLLOWLOCATION => false,
+            'redirection' => 0,
+            'sslverify'   => true,
+            'blocking'    => true,
         ]);
 
-        $response = curl_exec($handle);
-        $status   = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
-        $error    = $response === false ? (string) curl_error($handle) : '';
+        if (is_wp_error($response)) {
+            return ['status' => 0, 'error' => $response->get_error_message()];
+        }
 
-        curl_close($handle);
-
-        return ['status' => $status, 'error' => $error];
+        return [
+            'status' => (int) wp_remote_retrieve_response_code($response),
+            'error'  => '',
+        ];
     }
 }

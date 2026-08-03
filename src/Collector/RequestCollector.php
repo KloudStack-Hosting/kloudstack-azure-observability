@@ -215,7 +215,7 @@ final class RequestCollector
     private static function path(): string
     {
         $uri  = self::server('REQUEST_URI') ?: '/';
-        $path = parse_url($uri, PHP_URL_PATH);
+        $path = wp_parse_url($uri, PHP_URL_PATH);
 
         return is_string($path) && $path !== '' ? $path : '/';
     }

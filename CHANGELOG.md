@@ -24,6 +24,11 @@ The telemetry schema is versioned independently — see the functional specifica
   drives the browser SDK's AJAX/fetch header tracking; there is no server-side header capture. Sensitive
   query-parameter redaction remains always-on.
 - Plugin URI now points at the public GitHub repository.
+- **WordPress.org Plugin Check compliance.** The telemetry transport now uses `wp_remote_post`
+  instead of raw cURL; `wp_parse_url` replaces `parse_url`; the debug log writes to the uploads
+  directory via `wp_upload_dir()` rather than a hard-coded `wp-content` path; the browser-snippet
+  builder no longer uses heredoc syntax; and the redundant `load_plugin_textdomain()` call is
+  dropped (WordPress.org loads translations automatically). No runtime behaviour changes.
 
 ### Tests
 - Added coverage for excluded-path matching (`RequestCollector::matchesUserPattern`) and the `Log::enabled()`
