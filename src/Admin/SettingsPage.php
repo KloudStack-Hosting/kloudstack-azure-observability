@@ -94,8 +94,8 @@ final class SettingsPage
                 'privacy'     => true,
             ],
             'header_tracking' => [
-                'label'       => 'Collect request and response headers',
-                'description' => 'WARNING: transmits cookies and authorization headers to Azure. Leave off unless you have a specific need and have accounted for it in your privacy policy.',
+                'label'       => 'Collect browser request and response headers',
+                'description' => 'Records HTTP headers on the browser SDK\'s dependency calls (AJAX/fetch). WARNING: can transmit cookies and authorization headers to Azure — leave off unless you have a specific need and have accounted for it in your privacy policy.',
                 'privacy'     => true,
             ],
             'track_admin'    => [
