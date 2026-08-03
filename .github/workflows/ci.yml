@@ -162,8 +162,8 @@ jobs:
             # catches real string add/change/remove but not cosmetic churn:
             #   - POT-Creation-Date: a timestamp, regenerated every run.
             #   - "#:" source references (file:line): shift whenever unrelated code moves lines.
-            grep -vE '^(#:|"POT-Creation-Date:)' languages/kloudstack-azure-observability.pot > /tmp/committed.stripped
-            grep -vE '^(#:|"POT-Creation-Date:)' /tmp/regenerated.pot > /tmp/regenerated.stripped
+            grep -vE "^(#:|\"POT-Creation-Date:)" languages/kloudstack-azure-observability.pot > /tmp/committed.stripped
+            grep -vE "^(#:|\"POT-Creation-Date:)" /tmp/regenerated.pot > /tmp/regenerated.stripped
 
             if ! diff -u /tmp/committed.stripped /tmp/regenerated.stripped; then
               echo "::error::languages/kloudstack-azure-observability.pot is out of date. Regenerate it: wp i18n make-pot . languages/kloudstack-azure-observability.pot --slug=kloudstack-azure-observability --domain=kloudstack-azure-observability --exclude=vendor,tests,benchmark,docs,scripts,legacy,loader,node_modules"
