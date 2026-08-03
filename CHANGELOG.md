@@ -40,7 +40,7 @@ The telemetry schema is versioned independently — see the functional specifica
   other plugins load). The KloudStack image activates the plugin once on first deploy so it is on
   by default. Plugin code is unchanged from rc1.
 
-## [Unreleased] — 2.0.0
+## [2.0.0]
 
 First public release. A rewrite of the 1.x MU-plugin, extracted from the KloudStack WordPress
 image into a standalone, publicly distributed plugin.
