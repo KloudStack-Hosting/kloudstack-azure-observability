@@ -34,6 +34,18 @@ final class SettingsTest extends TestCase
         self::assertFalse($settings->bool('track_cron'));
         self::assertFalse($settings->bool('track_php_errors'));
         self::assertSame(100, $settings->samplingRate());
+
+        // Browser telemetry is the one that loads a third-party SDK into every visitor's browser,
+        // so WordPress.org guidelines 7 and 9 require it opt-in. Flipping either of these back on
+        // by default is a review failure, not a preference.
+        self::assertFalse(
+            $settings->bool('client_enabled'),
+            'Browser telemetry must default OFF — it injects the Application Insights SDK for visitors.'
+        );
+        self::assertTrue(
+            $settings->bool('cookieless'),
+            'Cookie-less must default ON so enabling browser telemetry cannot silently set ai_user/ai_session.'
+        );
     }
 
     /**

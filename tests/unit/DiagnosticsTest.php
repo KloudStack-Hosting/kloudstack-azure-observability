@@ -175,6 +175,11 @@ final class DiagnosticsTest extends TestCase
 
     public function testWithheldConsentIsSurfaced(): void
     {
+        // Browser telemetry is opt-in, so it has to be switched on to reach the consent branch at
+        // all — the "disabled" check short-circuits ahead of it. Without this the test silently
+        // asserts the wrong thing.
+        WPStubs::$options['kloudstack_obs_client_enabled'] = true;
+
         // Otherwise this presents as "browser telemetry mysteriously missing".
         WPStubs::$filters['kloudstack_obs_has_consent'] = static function (): bool {
             return false;

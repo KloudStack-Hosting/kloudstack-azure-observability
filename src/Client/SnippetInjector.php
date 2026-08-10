@@ -204,27 +204,30 @@ final class SnippetInjector
             return;
         }
 
-        add_filter(
-            'wp_script_attributes',
-            /**
-             * @param mixed $attributes
-             * @return mixed
-             */
-            static function ($attributes) use ($handle, $nonce) {
-                if (!is_array($attributes)) {
-                    return $attributes;
-                }
+        add_filter('wp_script_attributes', static function (array $attributes) use ($handle, $nonce): array {
+            return self::applyNonce($attributes, $handle, $nonce);
+        });
+    }
 
-                // WordPress ids inline script tags as "<handle>-js-after" / "-js-before".
-                $id = isset($attributes['id']) ? (string) $attributes['id'] : '';
+    /**
+     * Add the nonce to our own script tags only.
+     *
+     * WordPress ids inline script tags as "<handle>-js-after" / "-js-before", so matching the
+     * handle prefix keeps the nonce off every other plugin's scripts.
+     *
+     * @param array<string, mixed> $attributes
+     *
+     * @return array<string, mixed>
+     */
+    private static function applyNonce(array $attributes, string $handle, string $nonce): array
+    {
+        $id = isset($attributes['id']) ? (string) $attributes['id'] : '';
 
-                if (strpos($id, $handle . '-js') === 0) {
-                    $attributes['nonce'] = $nonce;
-                }
+        if (strpos($id, $handle . '-js') === 0) {
+            $attributes['nonce'] = $nonce;
+        }
 
-                return $attributes;
-            }
-        );
+        return $attributes;
     }
 
     /**

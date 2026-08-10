@@ -44,6 +44,12 @@ final class WPStubs
     /** @var string */
     public static $homeUrl = 'https://example.com';
 
+    /** @var array<string, array<string, mixed>> Registered scripts, keyed by handle. */
+    public static $scripts = [];
+
+    /** @var array<int, string> Handles passed to wp_enqueue_script(), in order. */
+    public static $enqueued = [];
+
     public static function reset(): void
     {
         self::$options             = [];
@@ -251,5 +257,57 @@ if (!function_exists('home_url')) {
     function home_url(): string
     {
         return WPStubs::$homeUrl;
+    }
+}
+
+/*
+ * Script API — used by SnippetInjector, which delivers the client snippet through
+ * wp_add_inline_script() rather than echoing a <script> tag (a WordPress.org requirement).
+ *
+ * Recorded rather than discarded so a test can assert what was enqueued.
+ */
+
+if (!function_exists('wp_register_script')) {
+    /**
+     * @param string|false     $src
+     * @param array<int,string> $deps
+     * @param string|bool|null $ver
+     * @param array<string,mixed>|bool $args
+     */
+    function wp_register_script(string $handle, $src = '', array $deps = [], $ver = false, $args = false): bool
+    {
+        WPStubs::$scripts[$handle] = ['src' => $src, 'deps' => $deps, 'ver' => $ver, 'inline' => []];
+
+        return true;
+    }
+}
+
+if (!function_exists('wp_enqueue_script')) {
+    function wp_enqueue_script(string $handle): void
+    {
+        WPStubs::$enqueued[] = $handle;
+    }
+}
+
+if (!function_exists('wp_add_inline_script')) {
+    function wp_add_inline_script(string $handle, string $data, string $position = 'after'): bool
+    {
+        if (!isset(WPStubs::$scripts[$handle])) {
+            return false;
+        }
+
+        WPStubs::$scripts[$handle]['inline'][$position][] = $data;
+
+        return true;
+    }
+}
+
+if (!function_exists('wp_mkdir_p')) {
+    /**
+     * Used by Log, which writes beneath uploads/<plugin-slug>/ rather than the uploads root.
+     */
+    function wp_mkdir_p(string $target): bool
+    {
+        return is_dir($target) || mkdir($target, 0777, true);
     }
 }
