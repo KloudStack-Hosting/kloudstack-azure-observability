@@ -25,14 +25,37 @@ final class Settings
      */
     private const DEFAULTS = [
         'enabled'                => true,
-        'client_enabled'         => true,
+
+        /*
+         * Browser telemetry is OPT-IN. It injects Microsoft's Application Insights JavaScript SDK
+         * into every page and records visitor activity, which WordPress.org guidelines 7 and 9
+         * require to be off until the site owner turns it on. Server-side telemetry above is a
+         * different case: it transmits only to the owner's own Application Insights resource and
+         * only once they supply a connection string, so nothing leaves a site that has not been
+         * configured.
+         */
+        'client_enabled'         => false,
+
         'sampling_requests'      => 100,
         'sampling_dependencies'  => 100,
         'cloud_role'             => '',
         'anonymise_ip'           => true,
         'query_allowlist'        => null,
         'header_tracking'        => false,
-        'cookieless'             => false,
+
+        /*
+         * Cookie-less by default. With cookies the SDK sets ai_user and ai_session, which in most
+         * jurisdictions needs visitor consent before the first page view — an obligation the site
+         * owner inherits simply by enabling browser telemetry. Defaulting off means switching
+         * browser telemetry on cannot silently create that obligation.
+         *
+         * The trade-off is real and documented in readme.txt and README.md: without cookies there
+         * is no session or user aggregation, so Application Insights reports page and dependency
+         * timings but not "users" or "sessions". An owner who needs those can turn cookies on and
+         * take on the consent duty, ideally driving the kloudstack_obs_has_consent filter from a
+         * consent-management plugin.
+         */
+        'cookieless'             => true,
         'excluded_paths'         => [],
         'track_admin'            => true,
         'track_cron'             => false,

@@ -65,12 +65,26 @@ and fatal errors are transmitted with their message, type and stack trace. If br
 is enabled, the Application Insights JavaScript SDK is loaded in visitors' browsers and sends
 page views, AJAX calls and JavaScript errors directly to the same endpoint.
 
+**Browser telemetry is off until you turn it on.** No JavaScript SDK is loaded and no visitor
+data is collected in the browser unless you enable it in Settings. Server-side telemetry only
+transmits once you supply an Application Insights connection string; without one, nothing leaves
+your site.
+
 **Visitor data:** client IP addresses are anonymised before transmission by default. Query
 strings are redacted against an allowlist by default. Request and response headers, which may
 contain cookies and authorization data, are **not** transmitted unless you explicitly enable
-that option. The browser SDK sets `ai_user` and `ai_session` cookies unless cookie-less mode is
-enabled; in most jurisdictions these require visitor consent, and a filter is provided to gate
-injection behind a consent management platform.
+that option.
+
+**Cookies are off by default.** When you enable browser telemetry it runs in cookie-less mode,
+so the SDK sets no `ai_user` or `ai_session` cookies and, in most jurisdictions, no visitor
+consent obligation arises from using it.
+
+The trade-off: without those cookies Application Insights cannot group requests into sessions or
+distinguish returning visitors, so reports show page and dependency timings but **not** "users"
+or "sessions". If you need that aggregation, turn cookie-less mode off in Settings — but the
+cookies then require visitor consent in most jurisdictions, and obtaining it becomes your
+responsibility. A `kloudstack_obs_has_consent` filter is provided so a consent management
+platform can gate injection.
 
 **Endpoints contacted:** the Application Insights ingestion endpoint from your connection string
 (typically `https://<region>.in.applicationinsights.azure.com` or

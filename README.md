@@ -81,7 +81,19 @@ These are not stylistic preferences — each exists because of a specific failur
 3. **No Composer dependencies in the shipped artifact.** WordPress plugins share one PHP process;
    vendored libraries collide.
 4. **Privacy defaults are conservative.** IP anonymisation on, query strings redacted, header
-   tracking off.
+   tracking off, **browser telemetry off**, and **cookie-less on** when it is switched on.
+
+   Browser telemetry is opt-in because enabling it loads Microsoft's JavaScript SDK into every
+   visitor's browser — WordPress.org guidelines 7 and 9 require that to be off by default.
+   Server-side telemetry is a different case: it transmits only to the site owner's own Azure
+   resource and only once they supply a connection string.
+
+   Cookie-less is on by default so that turning browser telemetry on cannot silently create a
+   consent obligation. **The trade-off is real:** without `ai_user` / `ai_session` cookies,
+   Application Insights reports page and dependency timings but cannot aggregate sessions or
+   distinguish returning visitors — no "users" or "sessions" in the portal. Owners who need that
+   can disable cookie-less mode and take on the consent duty, ideally driving the
+   `kloudstack_obs_has_consent` filter from a consent management platform.
 5. **The telemetry schema is a contract.** Marketplace workbook queries bind to it. Changing a
    dimension is a breaking change.
 

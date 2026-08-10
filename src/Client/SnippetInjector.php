@@ -156,32 +156,75 @@ final class SnippetInjector
             return;
         }
 
-        $nonce     = (string) apply_filters('kloudstack_obs_script_nonce', '');
-        $nonceAttr = $nonce !== '' ? ' nonce="' . esc_attr($nonce) . '"' : '';
-
         /*
+         * Delivered through the script API rather than echoed as a raw <script> tag, per the
+         * WordPress.org requirement to enqueue all JavaScript.
+         *
+         * The handle is registered with no src on purpose. Microsoft's loader snippet is a
+         * bootstrapper: it fetches the SDK itself, asynchronously, from either the CDN or the
+         * bundled copy depending on the bundled_sdk setting. Enqueuing that URL directly would
+         * load the SDK twice. A src-less handle gives us a legitimate carrier for the inline
+         * code while leaving the loader in charge of fetching.
+         *
+         * Priority 2 on wp_head still applies (see register()), so the SDK initialises early
+         * enough to capture page-load timings.
+         *
          * wp_json_encode produces valid JSON with everything quoted and escaped, which is safe
          * inside an inline script. esc_js() must NOT be used here: it HTML-encodes ampersands,
          * which corrupts connection strings and breaks the SDK. The 1.x plugin documented the
          * same trap.
-         *
-         * phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped
          */
-        echo "
-<!-- KloudStack Observability for Azure -->
-";
-        echo '<script type="text/javascript"' . $nonceAttr . '>' . "
-";
-        echo 'window.kloudstackObs = ' . $context . ';' . "
-";
-        echo $snippet . "
-";
-        echo self::loaderInvocation($source, $configJson);
-        echo "</script>
-";
-        echo "<!-- /KloudStack Observability for Azure -->
-";
-        // phpcs:enable WordPress.Security.EscapeOutput.OutputNotEscaped
+        $handle = 'kloudstack-obs';
+
+        wp_register_script($handle, false, [], \KloudStack\Observability\VERSION, false);
+        wp_enqueue_script($handle);
+
+        wp_add_inline_script(
+            $handle,
+            'window.kloudstackObs = ' . $context . ';' . "\n"
+                . $snippet . "\n"
+                . self::loaderInvocation($source, $configJson)
+        );
+
+        self::registerNonceFilter($handle);
+    }
+
+    /**
+     * Apply the caller-supplied CSP nonce to our inline script tag.
+     *
+     * Previously the nonce was concatenated into a hand-built <script> tag. Inline scripts added
+     * through wp_add_inline_script are printed by WordPress, so the attribute has to be attached
+     * via the wp_script_attributes filter (WordPress 5.7+) instead.
+     */
+    private static function registerNonceFilter(string $handle): void
+    {
+        $nonce = (string) apply_filters('kloudstack_obs_script_nonce', '');
+
+        if ($nonce === '') {
+            return;
+        }
+
+        add_filter(
+            'wp_script_attributes',
+            /**
+             * @param mixed $attributes
+             * @return mixed
+             */
+            static function ($attributes) use ($handle, $nonce) {
+                if (!is_array($attributes)) {
+                    return $attributes;
+                }
+
+                // WordPress ids inline script tags as "<handle>-js-after" / "-js-before".
+                $id = isset($attributes['id']) ? (string) $attributes['id'] : '';
+
+                if (strpos($id, $handle . '-js') === 0) {
+                    $attributes['nonce'] = $nonce;
+                }
+
+                return $attributes;
+            }
+        );
     }
 
     /**

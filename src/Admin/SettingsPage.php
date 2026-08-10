@@ -80,8 +80,8 @@ final class SettingsPage
             ],
             'client_enabled' => [
                 'label'       => 'Browser telemetry',
-                'description' => 'Loads the Application Insights JavaScript SDK to record page views, AJAX calls and JavaScript errors.',
-                'privacy'     => false,
+                'description' => 'Off by default. Loads the Application Insights JavaScript SDK into every visitor\'s browser to record page views, AJAX calls and JavaScript errors. Runs cookie-less unless you change that below.',
+                'privacy'     => true,
             ],
             'anonymise_ip'   => [
                 'label'       => 'Anonymise visitor IP addresses',
@@ -90,7 +90,7 @@ final class SettingsPage
             ],
             'cookieless'     => [
                 'label'       => 'Cookie-less browser telemetry',
-                'description' => 'Stops the SDK setting ai_user and ai_session cookies, removing the consent obligation. Session and user aggregation become unavailable.',
+                'description' => 'On by default. Stops the SDK setting ai_user and ai_session cookies, so no visitor consent obligation arises. Turning this OFF enables session and returning-visitor aggregation in Application Insights, but the cookies then require consent in most jurisdictions and obtaining it is your responsibility.',
                 'privacy'     => true,
             ],
             'header_tracking' => [

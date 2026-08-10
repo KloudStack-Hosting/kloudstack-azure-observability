@@ -6,6 +6,35 @@ All notable changes to this project are documented here. The format follows
 
 The telemetry schema is versioned independently — see the functional specification, section 8.
 
+## [Unreleased]
+
+### Changed
+- **Browser telemetry is now opt-in.** `client_enabled` defaults to `false`. Enabling it loads
+  Microsoft's Application Insights JavaScript SDK into every visitor's browser, which
+  WordPress.org guidelines 7 and 9 require to be off by default. Server-side telemetry is
+  unchanged: it transmits only to the site owner's own Azure resource, and only once they supply
+  a connection string.
+- **Cookie-less browser telemetry is now the default.** `cookieless` defaults to `true`, so
+  switching browser telemetry on cannot silently create a consent obligation.
+
+  **Trade-off:** without the `ai_user` and `ai_session` cookies, Application Insights reports page
+  and dependency timings but cannot aggregate sessions or identify returning visitors — no
+  "users" or "sessions" in the portal. Owners who need that can turn cookie-less mode off and
+  take on the consent duty, ideally gating injection through the `kloudstack_obs_has_consent`
+  filter from a consent management platform.
+
+### Fixed
+- **The client snippet is delivered through the script API** rather than echoed as a raw
+  `<script>` tag, as WordPress.org requires. It is attached with `wp_add_inline_script()` to a
+  src-less registered handle — Microsoft's loader fetches the SDK itself, so enqueuing that URL
+  directly would load it twice. Any CSP nonce supplied through `kloudstack_obs_script_nonce` is
+  now applied via the `wp_script_attributes` filter. The rendered JavaScript is unchanged.
+- **The debug log no longer writes to the uploads root.** It now lives in
+  `uploads/kloudstack-azure-observability/`, created with `wp_mkdir_p()` and protected by
+  `.htaccess` and `index.php`. Previously it was written as
+  `uploads/kloudstack-obs-debug.log`, publicly fetchable at a guessable URL despite containing
+  request paths and error messages. Debug logging remains off by default.
+
 ## [2.0.0-rc3]
 
 ### Fixed
