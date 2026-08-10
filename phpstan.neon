@@ -15,3 +15,11 @@ parameters:
     scanFiles:
         - tests/phpstan-stubs.php
     treatPhpDocTypesAsCertain: false
+
+    # Cap parallelism. PHPStan's memory limit applies PER WORKER, and phpstan-wordpress loads a
+    # ~6 MB stub file into each one, so the ceiling is reached by running more workers rather than
+    # by analysing more code. On a 2-core GitHub runner the wall-clock cost of capping this is
+    # negligible; the alternative is an out-of-memory crash that reports no findings at all and
+    # looks exactly like a code failure.
+    parallel:
+        maximumNumberOfProcesses: 2
