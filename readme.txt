@@ -4,7 +4,7 @@ Tags: application insights, azure, monitoring, observability, telemetry
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.0.3
+Stable tag: 2.0.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -137,6 +137,11 @@ manually in settings.
 
 == Changelog ==
 
+= 2.0.4 =
+* The debug log filename now carries a per-site random suffix. The .htaccess written beside it
+  denies direct access on Apache, but nginx ignores .htaccess entirely, so on those servers a
+  fixed, identical-everywhere filename was guessable and the log fetchable. Both guards are kept.
+
 = 2.0.3 =
 * Hosting platform management API calls are excluded from request telemetry, alongside the health
   probe. These are the host calling the site rather than the site's own traffic, and being slow by
@@ -162,6 +167,9 @@ manually in settings.
 * Initial public release.
 
 == Upgrade Notice ==
+
+= 2.0.4 =
+Hardens the debug log against direct access on servers that ignore .htaccess, such as nginx.
 
 = 2.0.3 =
 Excludes hosting platform management API calls from telemetry.

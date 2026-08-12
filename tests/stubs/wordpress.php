@@ -311,3 +311,11 @@ if (!function_exists('wp_mkdir_p')) {
         return is_dir($target) || mkdir($target, 0777, true);
     }
 }
+
+if (!function_exists('wp_generate_password')) {
+    function wp_generate_password($length = 12, $special_chars = true, $extra_special_chars = false)
+    {
+        // Deterministic in tests; the real implementation is cryptographically random.
+        return substr(str_repeat('abcdefghijklmnopqrstuvwxyz0123456789', 2), 0, (int) $length);
+    }
+}
