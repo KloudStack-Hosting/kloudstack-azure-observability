@@ -4,7 +4,7 @@ Tags: application insights, azure, monitoring, observability, telemetry
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.0.1
+Stable tag: 2.0.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -137,6 +137,10 @@ manually in settings.
 
 == Changelog ==
 
+= 2.0.2 =
+* Health probe exclusion now also matches sites using plain permalinks, where the same route is
+  reached as /?rest_route=/custom/v1/healthcheck rather than /wp-json/custom/v1/healthcheck.
+
 = 2.0.1 =
 * Telemetry is now OFF by default and must be enabled by the site owner. Nothing is transmitted
   until you turn it on, in line with WordPress.org guidelines 7 and 9.
@@ -153,6 +157,9 @@ manually in settings.
 * Initial public release.
 
 == Upgrade Notice ==
+
+= 2.0.2 =
+Fixes health probe exclusion on sites using plain permalinks.
 
 = 2.0.1 =
 Telemetry is now off by default. After updating, enable it on the settings screen if you want data
