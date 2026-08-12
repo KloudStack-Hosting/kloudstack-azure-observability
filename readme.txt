@@ -4,7 +4,7 @@ Tags: application insights, azure, monitoring, observability, telemetry
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.0.4
+Stable tag: 2.0.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -137,6 +137,10 @@ manually in settings.
 
 == Changelog ==
 
+= 2.0.5 =
+* The plugin no longer writes a log file of its own. Debug output is handed to WordPress via
+  error_log(), so WP_DEBUG_LOG decides where it lands. The setting itself is unchanged.
+
 = 2.0.4 =
 * The debug log filename now carries a per-site random suffix. The .htaccess written beside it
   denies direct access on Apache, but nginx ignores .htaccess entirely, so on those servers a
@@ -167,6 +171,10 @@ manually in settings.
 * Initial public release.
 
 == Upgrade Notice ==
+
+= 2.0.5 =
+Debug output now goes to the WordPress debug log instead of a file in uploads. Any log left by an
+earlier version can be deleted.
 
 = 2.0.4 =
 Hardens the debug log against direct access on servers that ignore .htaccess, such as nginx.
