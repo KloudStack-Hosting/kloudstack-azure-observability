@@ -27,6 +27,12 @@ final class DiagnosticsTest extends TestCase
         parent::setUp();
         WPStubs::reset();
         $this->clearEnvironment();
+
+        // Telemetry defaults OFF from 2.0.1 (opt-in). The "disabled" check short-circuits the
+        // ones after it, so without this every test here would exercise the disabled path
+        // instead of the branch it names. Tests that care about the disabled path set it back
+        // to false themselves.
+        WPStubs::$options['kloudstack_obs_enabled'] = true;
     }
 
     protected function tearDown(): void

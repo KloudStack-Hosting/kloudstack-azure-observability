@@ -28,7 +28,11 @@ final class SettingsTest extends TestCase
         // review, so they are asserted rather than assumed.
         $settings = new Settings();
 
-        self::assertTrue($settings->bool('enabled'));
+        // Telemetry is OFF until the site owner turns it on. This flipped in 2.0.1: the
+        // WordPress.org review would not accept "it only goes to the owner's own Azure resource"
+        // as grounds for a default, because a default is not an informed choice. Flipping this
+        // back on is a review failure, not a preference.
+        self::assertFalse($settings->bool('enabled'), 'Telemetry must default OFF (opt-in).');
         self::assertTrue($settings->bool('anonymise_ip'), 'IP anonymisation must default on.');
         self::assertFalse($settings->bool('header_tracking'), 'Header capture must default off.');
         self::assertFalse($settings->bool('track_cron'));
@@ -135,6 +139,10 @@ final class SettingsTest extends TestCase
 
     public function testValuesAreMemoisedAndResettable(): void
     {
+        // Driven from a STORED value rather than the default, so this keeps testing memoisation
+        // and does not quietly become a second assertion about what the default happens to be.
+        WPStubs::$options['kloudstack_obs_enabled'] = true;
+
         $settings = new Settings();
 
         self::assertTrue($settings->bool('enabled'));
