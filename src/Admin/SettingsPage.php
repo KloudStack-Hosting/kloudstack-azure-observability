@@ -115,7 +115,7 @@ final class SettingsPage
             ],
             'debug_log'      => [
                 'label'       => 'Debug log',
-                'description' => 'Writes plugin diagnostics to the WordPress debug log. Requires WP_DEBUG. For troubleshooting only.',
+                'description' => "Writes plugin diagnostics to the WordPress debug log. This setting alone does nothing — WordPress debugging must also be on, which means adding define( 'WP_DEBUG', true ); to your wp-config.php file. For troubleshooting only.",
                 'privacy'     => false,
             ],
         ];

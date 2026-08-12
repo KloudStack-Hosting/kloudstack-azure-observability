@@ -4,7 +4,7 @@ Tags: application insights, azure, monitoring, observability, telemetry
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.0.5
+Stable tag: 2.0.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -137,6 +137,10 @@ manually in settings.
 
 == Changelog ==
 
+= 2.0.6 =
+* The Debug log setting now says plainly that it does nothing on its own, and names the
+  define( 'WP_DEBUG', true ); line that has to be added to wp-config.php for it to take effect.
+
 = 2.0.5 =
 * The plugin no longer writes a log file of its own. Debug output is handed to WordPress via
   error_log(), so WP_DEBUG_LOG decides where it lands. The setting itself is unchanged.
@@ -171,6 +175,9 @@ manually in settings.
 * Initial public release.
 
 == Upgrade Notice ==
+
+= 2.0.6 =
+Wording only — the Debug log setting now explains that WP_DEBUG must be enabled separately.
 
 = 2.0.5 =
 Debug output now goes to the WordPress debug log instead of a file in uploads. Any log left by an
