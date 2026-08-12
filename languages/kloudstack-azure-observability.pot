@@ -2,7 +2,7 @@
 # This file is distributed under the GPL-2.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: KloudStack Observability for Azure 2.0.0\n"
+"Project-Id-Version: KloudStack Observability for Azure 2.0.1\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/kloudstack-azure-observability\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -77,82 +77,90 @@ msgid "Telemetry"
 msgstr ""
 
 #: src/Admin/SettingsPage.php:228
-msgid "Excluded paths"
+msgid "Telemetry is off. Nothing is being sent to Azure."
 msgstr ""
 
-#: src/Admin/SettingsPage.php:229
-msgid "One per line. Plain text matches anywhere in the path; wrap in # to use a regular expression."
-msgstr ""
-
-#: src/Admin/SettingsPage.php:233
-msgid "Privacy"
-msgstr ""
-
-#: src/Admin/SettingsPage.php:234
-msgid "These controls govern what leaves your site. The defaults are the conservative option."
+#: src/Admin/SettingsPage.php:231
+msgid "This plugin does not transmit anything until you turn it on here. Enable \"Enable telemetry\" below to start sending data to the Application Insights resource named in your connection string."
 msgstr ""
 
 #: src/Admin/SettingsPage.php:245
+msgid "Excluded paths"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:246
+msgid "One per line. Plain text matches anywhere in the path; wrap in # to use a regular expression."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:250
+msgid "Privacy"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:251
+msgid "These controls govern what leaves your site. The defaults are the conservative option."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:262
 msgid "Advanced"
 msgstr ""
 
-#: src/Admin/SettingsPage.php:263
+#: src/Admin/SettingsPage.php:280
 msgid "Settings saved."
 msgstr ""
 
-#: src/Admin/SettingsPage.php:269
+#: src/Admin/SettingsPage.php:286
 msgid "No Application Insights connection string is configured, so no telemetry is being collected."
 msgstr ""
 
-#: src/Admin/SettingsPage.php:282
+#: src/Admin/SettingsPage.php:299
 msgid "Connection string"
 msgstr ""
 
 #. translators: %s: configuration source
-#: src/Admin/SettingsPage.php:291
+#: src/Admin/SettingsPage.php:308
 #, php-format
 msgid "Set by %s and cannot be changed here. This is deliberate: the hosting environment is authoritative."
 msgstr ""
 
-#: src/Admin/SettingsPage.php:299
+#: src/Admin/SettingsPage.php:316
 msgid "From your Application Insights resource in the Azure portal, or from the KloudStack Marketplace deployment output."
 msgstr ""
 
-#: src/Admin/SettingsPage.php:321
+#: src/Admin/SettingsPage.php:338
 msgid "Enabled"
 msgstr ""
 
-#: src/Admin/SettingsPage.php:329
+#: src/Admin/SettingsPage.php:346
 msgid "Sampling"
 msgstr ""
 
-#: src/Admin/SettingsPage.php:333
+#: src/Admin/SettingsPage.php:350
 msgid "Percentage of requests recorded. Lower values reduce Azure ingestion cost; Azure extrapolates totals so counts stay approximately correct."
 msgstr ""
 
 #. translators: %s: comma-separated list of query parameter names
-#: src/Admin/SettingsPage.php:370
+#: src/Admin/SettingsPage.php:387
 #, php-format
 msgid "Query parameters named %s are always redacted before transmission, regardless of these settings."
 msgstr ""
 
-#: src/Admin/SettingsPage.php:377
+#: src/Admin/SettingsPage.php:394
 msgid "Diagnostics"
 msgstr ""
 
-#: src/Admin/SettingsPage.php:378
+#: src/Admin/SettingsPage.php:395
 msgid "Checks configuration, Azure environment, outbound connectivity and transmission, and sends one test item to Azure."
 msgstr ""
 
-#: src/Admin/SettingsPage.php:385
+#: src/Admin/SettingsPage.php:402
 msgid "Run self-test"
 msgstr ""
 
-#: src/Admin/SettingsPage.php:397
+#: src/Admin/SettingsPage.php:414
 msgid "Self-test result"
 msgstr ""
 
-#: src/Admin/SettingsPage.php:418
+#: src/Admin/SettingsPage.php:435
 msgid "Copy this when contacting support:"
 msgstr ""
 
