@@ -4,7 +4,7 @@ Tags: application insights, azure, monitoring, observability, telemetry
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.0.0
+Stable tag: 2.0.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,10 +65,12 @@ and fatal errors are transmitted with their message, type and stack trace. If br
 is enabled, the Application Insights JavaScript SDK is loaded in visitors' browsers and sends
 page views, AJAX calls and JavaScript errors directly to the same endpoint.
 
-**Browser telemetry is off until you turn it on.** No JavaScript SDK is loaded and no visitor
-data is collected in the browser unless you enable it in Settings. Server-side telemetry only
-transmits once you supply an Application Insights connection string; without one, nothing leaves
-your site.
+**Nothing is sent until you turn it on.** All telemetry is off by default. On a fresh install the
+plugin transmits nothing at all — not server-side request data, and not browser data — until you
+enable it on the settings screen. Browser telemetry is a second, separate opt-in: no JavaScript
+SDK is loaded and no visitor data is collected in the browser unless you enable that as well.
+Server-side telemetry additionally requires an Application Insights connection string; without
+one, nothing leaves your site regardless of the settings.
 
 **Visitor data:** client IP addresses are anonymised before transmission by default. Query
 strings are redacted against an allowlist by default. Request and response headers, which may
@@ -135,10 +137,26 @@ manually in settings.
 
 == Changelog ==
 
+= 2.0.1 =
+* Telemetry is now OFF by default and must be enabled by the site owner. Nothing is transmitted
+  until you turn it on, in line with WordPress.org guidelines 7 and 9.
+* The settings screen now states plainly when telemetry is off and nothing is being sent.
+* The debug log is written to a protected `kloudstack-azure-observability` folder inside the
+  uploads directory, resolved with wp_upload_dir(), instead of the uploads root.
+* The browser SDK snippet is registered through wp_add_inline_script() rather than emitted as a
+  raw script tag.
+* Hosting platform health probes are excluded from request telemetry. On a low-traffic site these
+  could account for over 99% of recorded requests, hiding the site's real traffic and adding
+  needless ingestion cost.
+
 = 2.0.0 =
 * Initial public release.
 
 == Upgrade Notice ==
+
+= 2.0.1 =
+Telemetry is now off by default. After updating, enable it on the settings screen if you want data
+sent to Azure. Existing sites that already had it enabled keep their setting.
 
 = 2.0.0 =
 Initial public release.

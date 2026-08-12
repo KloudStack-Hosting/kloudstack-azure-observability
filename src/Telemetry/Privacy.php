@@ -104,10 +104,16 @@ final class Privacy
     /**
      * Whether telemetry may be collected for this request.
      *
-     * Defaults to granted. Consent-management plugins gate the client-side SDK and its cookies
-     * through this filter; server-side telemetry about the site's own performance is not
-     * personal data when IPs are anonymised, but the filter governs both so a site owner has one
-     * switch rather than two.
+     * Defaults to GRANTED, and that is safe only because it is not the outer gate: nothing is
+     * collected at all unless the site owner has turned telemetry on, which is off by default.
+     * This filter exists so a consent-management plugin can withdraw permission per visitor —
+     * `add_filter('kloudstack_obs_has_consent', ...)` returning false suppresses collection for
+     * that request, including the client-side SDK and its cookies.
+     *
+     * Defaulting it to false instead would mean a site owner who deliberately enabled telemetry
+     * still got nothing, with no error and no explanation, until they discovered an undocumented
+     * filter. That is a worse failure than the one it would prevent, because the opt-in has
+     * already been made explicitly one layer up.
      */
     public static function hasConsent(): bool
     {

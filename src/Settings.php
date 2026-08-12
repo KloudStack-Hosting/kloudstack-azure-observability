@@ -24,15 +24,25 @@ final class Settings
      * @var array<string, mixed>
      */
     private const DEFAULTS = [
-        'enabled'                => true,
+        /*
+         * ALL telemetry is OPT-IN. Nothing is transmitted until the site owner turns this on.
+         *
+         * This previously defaulted to true, reasoning that server-side telemetry goes only to the
+         * owner's OWN Application Insights resource and only once a connection string exists, so
+         * no data reaches us or any third party of ours. The WordPress.org review did not accept
+         * that distinction: guidelines 7 and 9 require transmission to be off until the user
+         * chooses it, whoever owns the destination. They are right that a default cannot be an
+         * informed choice, and a site owner who never opened this page has not made one.
+         *
+         * Hosts that provision this plugin should set the option explicitly at provision time —
+         * that IS a deliberate choice, made by the party who owns the Azure resource.
+         */
+        'enabled'                => false,
 
         /*
-         * Browser telemetry is OPT-IN. It injects Microsoft's Application Insights JavaScript SDK
-         * into every page and records visitor activity, which WordPress.org guidelines 7 and 9
-         * require to be off until the site owner turns it on. Server-side telemetry above is a
-         * different case: it transmits only to the owner's own Application Insights resource and
-         * only once they supply a connection string, so nothing leaves a site that has not been
-         * configured.
+         * Browser telemetry is opt-in for the same reason and one further one: it injects
+         * Microsoft's Application Insights JavaScript SDK into every page and records VISITOR
+         * activity, so the people it observes are not the ones who installed the plugin.
          */
         'client_enabled'         => false,
 

@@ -36,6 +36,16 @@ final class RequestCollector
         '#/wp-cron\.php#',
         '#/xmlrpc\.php#',
         '#/wp-admin/admin-ajax\.php.*action=heartbeat#',
+
+        /*
+         * Platform health probes. A hosting provider's uptime check runs every few seconds and is
+         * not the site's traffic, but it looks exactly like it: on a quiet site it can be over 99%
+         * of recorded requests, which both drowns the real data — "slowest routes" ranks the probe
+         * — and bills the owner for storing it. Measured on one stack: 1,929 of 1,939 requests in
+         * 24 hours were the probe.
+         */
+        '#/wp-json/custom/v1/healthcheck#',
+        '#/wp-json/kloudstack/v1/status#',
     ];
 
     /** @var Reporter */

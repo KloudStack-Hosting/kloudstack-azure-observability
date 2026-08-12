@@ -217,6 +217,23 @@ final class SettingsPage
         echo '</tbody></table>';
 
         echo '<h2>' . esc_html__('Telemetry', 'kloudstack-azure-observability') . '</h2>';
+
+        /*
+         * Say plainly that nothing is being sent yet. A plugin that ships inert looks broken
+         * otherwise — the site owner sees an empty Azure resource and no explanation. This notice
+         * is shown only while telemetry is off, so it reads as a next step rather than a warning.
+         */
+        if (!$this->settings->bool('enabled')) {
+            echo '<div class="notice notice-info inline"><p><strong>'
+                . esc_html__('Telemetry is off. Nothing is being sent to Azure.', 'kloudstack-azure-observability')
+                . '</strong> '
+                . esc_html__(
+                    'This plugin does not transmit anything until you turn it on here. Enable "Enable telemetry" below to start sending data to the Application Insights resource named in your connection string.',
+                    'kloudstack-azure-observability'
+                )
+                . '</p></div>';
+        }
+
         echo '<table class="form-table" role="presentation"><tbody>';
         $this->renderToggle('enabled');
         $this->renderToggle('client_enabled');
