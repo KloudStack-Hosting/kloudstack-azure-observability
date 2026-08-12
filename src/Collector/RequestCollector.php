@@ -44,8 +44,12 @@ final class RequestCollector
          * — and bills the owner for storing it. Measured on one stack: 1,929 of 1,939 requests in
          * 24 hours were the probe.
          */
-        '#/wp-json/custom/v1/healthcheck#',
-        '#/wp-json/kloudstack/v1/status#',
+        // Matched WITHOUT the /wp-json prefix on purpose. The target is path + query string, and a
+        // site on plain permalinks reaches the same route as /?rest_route=/custom/v1/healthcheck,
+        // which a /wp-json-anchored pattern would miss entirely — so the probe would go on being
+        // recorded on exactly the sites least likely to notice.
+        '#/custom/v1/healthcheck#',
+        '#/kloudstack/v1/status#',
     ];
 
     /** @var Reporter */
