@@ -4,7 +4,7 @@ Tags: application insights, azure, monitoring, observability, telemetry
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.0.2
+Stable tag: 2.0.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -137,6 +137,11 @@ manually in settings.
 
 == Changelog ==
 
+= 2.0.3 =
+* Hosting platform management API calls are excluded from request telemetry, alongside the health
+  probe. These are the host calling the site rather than the site's own traffic, and being slow by
+  nature they dominated the slowest-routes report.
+
 = 2.0.2 =
 * Health probe exclusion now also matches sites using plain permalinks, where the same route is
   reached as /?rest_route=/custom/v1/healthcheck rather than /wp-json/custom/v1/healthcheck.
@@ -157,6 +162,9 @@ manually in settings.
 * Initial public release.
 
 == Upgrade Notice ==
+
+= 2.0.3 =
+Excludes hosting platform management API calls from telemetry.
 
 = 2.0.2 =
 Fixes health probe exclusion on sites using plain permalinks.

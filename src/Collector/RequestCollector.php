@@ -49,7 +49,13 @@ final class RequestCollector
         // which a /wp-json-anchored pattern would miss entirely — so the probe would go on being
         // recorded on exactly the sites least likely to notice.
         '#/custom/v1/healthcheck#',
-        '#/kloudstack/v1/status#',
+
+        // The hosting platform's own management API — status, plugin and theme inventory,
+        // self-update, MU-plugin push. Same argument as the probe above: it is the host calling
+        // the site, not the site's traffic. It is low volume, so this is not about cost; it is
+        // that these calls are slow by nature (they do real work) and were topping "slowest
+        // routes" at five seconds, making the panel describe US rather than the customer's site.
+        '#/kloudstack/v1/#',
     ];
 
     /** @var Reporter */
