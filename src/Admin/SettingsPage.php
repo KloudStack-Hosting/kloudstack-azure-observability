@@ -115,7 +115,7 @@ final class SettingsPage
             ],
             'debug_log'      => [
                 'label'       => 'Debug log',
-                'description' => "Writes plugin diagnostics to the WordPress debug log. This setting alone does nothing — WordPress debugging must also be on, which means adding define( 'WP_DEBUG', true ); to your wp-config.php file. For troubleshooting only.",
+                'description' => "Writes plugin diagnostics to the WordPress debug log, prefixed [kloudstack-obs]. This setting alone does nothing: WordPress debugging must also be on. In wp-config.php, above the \"stop editing\" line, add define( 'WP_DEBUG', true ); and define( 'WP_DEBUG_LOG', true ); — and set define( 'WP_DEBUG_DISPLAY', false ); so that errors are written to the log instead of being printed on the page where visitors would see them. Entries then appear in wp-content/debug.log. Turn all of this off once you have finished: the log is never rotated, so it grows for as long as it is on.",
                 'privacy'     => false,
             ],
         ];
