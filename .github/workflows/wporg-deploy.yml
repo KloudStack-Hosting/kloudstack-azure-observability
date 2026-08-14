@@ -8,6 +8,15 @@ name: Deploy to WordPress.org
 # and can delay updates reaching sites by up to six hours, so a release goes out once, when it is
 # ready, rather than on every merge.
 
+# Names each run in the Actions list so a rehearsal is distinguishable from the real thing at a
+# glance. Every run is otherwise titled "Deploy to WordPress.org", which makes the one run that
+# actually published indistinguishable from the dry runs around it — exactly the question asked
+# when working out what went out and when. run-name is evaluated before the job starts, so it can
+# only report the INPUT: a blank tag reads "latest" here, and the resolved version appears in the
+# job summary.
+run-name: >-
+  ${{ inputs.dry_run && 'Dry run' || 'PUBLISH' }} · ${{ inputs.tag || 'latest' }}
+
 on:
   workflow_dispatch:
     inputs:
