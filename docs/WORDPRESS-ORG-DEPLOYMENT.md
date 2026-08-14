@@ -405,7 +405,7 @@ checks the repo at tag time; this catches the different failure of publishing th
 | Secret | Value |
 |---|---|
 | `SVN_USERNAME` | the WordPress.org account username |
-| `SVN_PASSWORD` | a **dedicated SVN password**, generated at <https://wordpress.org/plugins/developers/> |
+| `SVN_PASSWORD` | a **dedicated SVN password** — Account Settings → [SVN password](https://profiles.wordpress.org/me/profile/edit/group/3/?screen=svn-password) |
 
 Use an SVN-specific password, not the account password. It is scoped to SVN and can be revoked and
 regenerated on its own, so a leak is contained and rotation costs nothing. Rotate it if it is ever
