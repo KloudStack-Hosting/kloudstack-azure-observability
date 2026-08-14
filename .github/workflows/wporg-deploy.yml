@@ -111,8 +111,15 @@ jobs:
       # BUILD_DIR deploys the unpacked release asset instead of the repository, which is what
       # keeps this job a publisher rather than a builder. ASSETS_DIR is copied to SVN /assets,
       # which lives outside trunk and is never part of the download.
+      #
+      # Pinned to a commit SHA, not @stable. This step receives SVN_USERNAME and SVN_PASSWORD as
+      # environment variables on EVERY run — including a dry run, where skipping the commit is the
+      # action's own choice rather than something we enforce. A mutable tag therefore means a
+      # third party can change what runs with our publishing credentials, and a "dry run" that
+      # reports nothing was committed would be no evidence that nothing was.
+      # 54bd289 == tag 2.3.0, which is what @stable pointed at on 2026-08-14.
       - name: Deploy
-        uses: 10up/action-wordpress-plugin-deploy@stable
+        uses: 10up/action-wordpress-plugin-deploy@54bd289b8525fd23a5c365ec369185f2966529c2
         with:
           dry-run: ${{ inputs.dry_run }}
         env:
