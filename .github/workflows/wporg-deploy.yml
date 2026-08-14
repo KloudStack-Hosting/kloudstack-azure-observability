@@ -31,7 +31,7 @@ jobs:
       # Assets are checked out from the default branch, NOT from the tag. WordPress.org serves
       # /assets live and they are not tied to a release, so the newest artwork is always the
       # correct artwork — including for a tag cut before it existed.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Resolve version
         id: v

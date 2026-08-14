@@ -175,6 +175,10 @@ rather than from the tag being published: the newest artwork is always the corre
 
 ## 6. Publishing a release
 
+> **The normal route is the GitHub workflow in §11.** It performs everything below, with the
+> version and asset checks automated and a dry run available. Read this section to understand what
+> the workflow does, or to publish by hand when it cannot be used — see §10.
+
 ### 6.1 Build the artifact
 
 Releases are built by CI, not by hand. Tagging is what triggers it:
@@ -281,9 +285,12 @@ Copy this into the release PR or issue.
       line — no `.git`, `tests/`, `legacy/`, `vendor/`, `node_modules/`, `composer.*`
 - [ ] `/assets` unchanged unless artwork actually changed
 
-**After committing**
+**After publishing**
 
-- [ ] Directory page shows the new version
+- [ ] `svn ls .../trunk` and `.../tags/<version>` are populated — instant, and the authoritative
+      check; the directory page lags behind it
+- [ ] Directory page shows the new version (~15 minutes)
+- [ ] **Screenshots render under the right captions** — no automated check can prove this
 - [ ] `observability-version.txt` in `KloudStack ACR Images` bumped to the same version
 - [ ] WordPress image rebuilt and promoted so managed stacks pick it up
 
@@ -296,6 +303,15 @@ commit, no rebase, no amend, and no way to remove a bad commit — only a new on
 
 **Never edit a tag.** Users who already installed that version, and any checksum taken of it,
 both assume it is immutable. Ship a patch version instead.
+
+**The two URLs update at different speeds, and that is the diagnostic.** SVN reflects a commit
+instantly and is authoritative; the directory page has to import and rebuild before it catches up.
+So: SVN populated but the page stale means wait. SVN empty means the commit never happened, and no
+amount of waiting will change it. Always check SVN first.
+
+**The commit email contains the whole diff.** WordPress.org mails every commit to the plugin
+author, and a first publish diffs the entire codebase — 29 files, unreadably long. That is normal.
+Later releases diff only what changed, because trunk is updated in place rather than replaced.
 
 **`Stable tag` pointing at a missing tag falls back to trunk.** That is how a half-finished trunk
 ends up installed on live sites. Commit the tag first; update `Stable tag` last.
@@ -341,33 +357,42 @@ reason for the pre-commit checklist.
 
 ---
 
-## 10. First publish (2.0.6)
+## 10. Publishing by hand (fallback)
 
-The initial publish differs from an update only in that `/trunk` and `/tags` start empty and the
-assets have never been uploaded.
+Use this only when the workflow in §11 cannot run — GitHub Actions unavailable, a broken deploy
+action, or a `Stable tag` that needs correcting urgently under §9.
+
+Requires a local SVN client (§2) and your WordPress.org credentials on the workstation, which is
+the reason it is the fallback and not the default.
 
 ```bash
 svn co https://plugins.svn.wordpress.org/kloudstack-azure-observability/ wporg-svn
 cd wporg-svn
 
-# assets — see §5, the two screenshots need renaming first
-cp /path/to/icon-128x128.png      assets/
-cp /path/to/icon-256x256.png      assets/
-cp /path/to/banner-772x250.png    assets/
-cp /path/to/banner-1544x500.png   assets/
-cp /path/to/screenshot-1.png      assets/
-cp /path/to/screenshot-2.png      assets/
+# assets — only if artwork changed; filenames must be exactly as in §5
+cp /path/to/.wordpress-org/* assets/
 
 # trunk from the verified release ZIP — see §6.2
+rm -rf trunk/*
 cp -r /tmp/wporg-build/kloudstack-azure-observability/* trunk/
+svn add --force trunk/
+svn status | grep '^!' | awk '{print $2}' | xargs -r svn rm
 
-svn add --force assets/ trunk/
-svn cp trunk tags/2.0.6
-svn status                       # review
-svn ci -m "Initial release 2.0.6"
+svn cp trunk tags/<version>
+svn status                       # review line by line
+svn ci -m "Release <version>"
 ```
 
-Then work through §6.6 and the "After committing" checklist in §7.
+SVN commits atomically, so trunk and the tag land in one revision and there is never a moment
+where `Stable tag` names a tag that does not exist.
+
+**Delete the working copy afterwards.** A stale checkout holding uncommitted adds against a
+repository that has since moved on is a live hazard, not a backup.
+
+Then work through §6.6 and the "After publishing" checklist in §7.
+
+> **History.** 2.0.6 was the first publish; `/trunk`, `/tags` and `/assets` were empty until then.
+> It went out via the §11 workflow at r3646533 on 2026-08-14, after a dry run.
 
 ---
 
