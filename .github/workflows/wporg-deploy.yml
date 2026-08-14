@@ -1,0 +1,146 @@
+name: Deploy to WordPress.org
+
+# WordPress.org SVN is a *release* system, not a development system. Nothing is developed here.
+# This job takes an already-built, already-tagged GitHub release and publishes it to SVN — it
+# never builds, never edits, and never reads the working tree for plugin code.
+#
+# It is deliberately manual. Every push to SVN rebuilds the ZIPs for *all* versions of the plugin
+# and can delay updates reaching sites by up to six hours, so a release goes out once, when it is
+# ready, rather than on every merge.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Released tag to publish, e.g. v2.0.6'
+        required: true
+      dry_run:
+        description: 'Dry run — do everything except the SVN commit'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Publish to WordPress.org
+    runs-on: ubuntu-latest
+
+    steps:
+      # Assets are checked out from the default branch, NOT from the tag. WordPress.org serves
+      # /assets live and they are not tied to a release, so the newest artwork is always the
+      # correct artwork — including for a tag cut before it existed.
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: v
+        run: |
+          set -euo pipefail
+          tag='${{ inputs.tag }}'
+          case "$tag" in
+            v*) ;;
+            *) echo "::error::Tag must start with v (got '${tag}')."; exit 1 ;;
+          esac
+          echo "tag=${tag}"            >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}"      >> "$GITHUB_OUTPUT"
+
+      # Trunk is built from the published, checksum-verified release asset — never from a working
+      # tree. The ZIP is what CI built and what the reviewer assessed; a checkout could differ by
+      # a stray file, a local edit, or a changed exclude list.
+      - name: Download the release asset and verify its checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.v.outputs.tag }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          slug=kloudstack-azure-observability
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "${slug}-${VERSION}.zip" \
+            --pattern "${slug}-${VERSION}.zip.sha256"
+          sha256sum -c "${slug}-${VERSION}.zip.sha256"
+          mkdir -p build
+          unzip -q "${slug}-${VERSION}.zip" -d build
+          test -d "build/${slug}"
+
+      # CI checks the repository at tag time. This checks the artifact actually being published,
+      # which is what users install — the two can diverge if the wrong asset is downloaded.
+      - name: The package must declare the version it is published as
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          plugin="build/kloudstack-azure-observability/kloudstack-azure-observability.php"
+          readme="build/kloudstack-azure-observability/readme.txt"
+
+          header=$(grep -oP '^\s*\*\s*Version:\s*\K.+' "$plugin" | tr -d '[:space:]')
+          const=$(grep -oP "^const VERSION\s*=\s*'\K[^']+" "$plugin")
+          # Stable tag decides which directory users download from. If it does not name this
+          # version, WordPress.org serves something other than what we are publishing — and a
+          # Stable tag pointing at a tag that does not exist falls back to trunk.
+          stable=$(grep -oP '^Stable tag:\s*\K.+' "$readme" | tr -d '[:space:]')
+
+          fail=0
+          for pair in "plugin-header:${header}" "VERSION-const:${const}" "readme-stable-tag:${stable}"; do
+            name="${pair%%:*}"; value="${pair#*:}"
+            if [ "$value" != "$VERSION" ]; then
+              echo "::error::${name} is '${value}', expected '${VERSION}'."
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ]
+
+      # WordPress.org matches assets by filename and silently ignores anything else, so a missing
+      # or misnamed file surfaces as a caption with no image on the public page rather than as an
+      # error anyone would notice.
+      - name: Required assets must be present and correctly named
+        run: |
+          set -euo pipefail
+          missing=0
+          for f in icon-128x128.png icon-256x256.png \
+                   banner-772x250.png banner-1544x500.png \
+                   screenshot-1.png screenshot-2.png; do
+            if [ ! -f ".wordpress-org/${f}" ]; then
+              echo "::error::.wordpress-org/${f} is missing."
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ]
+
+      # BUILD_DIR deploys the unpacked release asset instead of the repository, which is what
+      # keeps this job a publisher rather than a builder. ASSETS_DIR is copied to SVN /assets,
+      # which lives outside trunk and is never part of the download.
+      - name: Deploy
+        uses: 10up/action-wordpress-plugin-deploy@stable
+        with:
+          dry-run: ${{ inputs.dry_run }}
+        env:
+          SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
+          SLUG: kloudstack-azure-observability
+          VERSION: ${{ steps.v.outputs.version }}
+          BUILD_DIR: ./build/kloudstack-azure-observability
+          ASSETS_DIR: .wordpress-org
+
+      - name: Summary
+        if: always()
+        env:
+          TAG: ${{ steps.v.outputs.tag }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          {
+            echo "## ${TAG} → WordPress.org"
+            echo ""
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "**Dry run** — nothing was committed to SVN."
+              echo ""
+              echo "Re-run with \`dry_run\` unticked to publish."
+            else
+              echo "Published \`${VERSION}\` to trunk and \`tags/${VERSION}\`."
+              echo ""
+              echo "- https://wordpress.org/plugins/kloudstack-azure-observability/ (allow ~15 minutes)"
+              echo "- Bump \`observability-version.txt\` in \`KloudStack ACR Images\` to \`${TAG}\`,"
+              echo "  then rebuild and promote the WordPress image."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

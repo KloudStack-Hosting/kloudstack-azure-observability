@@ -27,17 +27,45 @@ reverse means our customers run a build the public cannot get.
 Git tags drive the GitHub release; SVN is a separate manual push. Nothing automatically keeps
 them in step — that is what the checklist in §7 is for.
 
+### SVN is a release system, not a development system
+
+WordPress.org states this plainly in [their own
+guidance](https://developer.wordpress.org/plugins/wordpress-org/how-to-use-subversion/#best-practices):
+
+> Unlike GitHub, SVN is meant to be a *release* system, not a development system.
+
+**All development happens in Git, on `main`.** Nothing is ever written, fixed, or iterated in SVN.
+The SVN repository receives finished, tagged, tested releases and nothing else — it is a
+distribution channel that happens to be spelled "version control".
+
+Two practical consequences:
+
+- **Never commit a work in progress to trunk.** WordPress.org's own advice is to push once, when
+  you are ready to go.
+- **Do not drip small commits at it.** Every push to SVN rebuilds the ZIP files for *all* versions
+  of the plugin, and that rebuild can delay updates reaching sites by up to six hours.
+
 ---
 
 ## 2. One-time setup
 
 ### Install Subversion
 
-Not installed on the current workstation. Either:
+**Only needed for the manual path.** The normal route is the GitHub workflow in §11, which needs
+no local SVN at all. Install this if you need to inspect the repository or publish by hand.
 
-- **CLI:** `winget install TortoiseSVN.TortoiseSVN` (tick "command line client tools" during
-  install), or Chocolatey `choco install svn`
+- `winget install --id Slik.Subversion` — a CLI-only Subversion build, preferred over TortoiseSVN
+  because there is no "command line client tools" checkbox to forget
 - Verify with `svn --version`
+
+The installer is an MSI and requires UAC elevation; in a non-elevated or automated shell it fails
+with exit code **1602** ("user cancelled"), which is the prompt going unanswered rather than a
+broken package. Accept the prompt, or extract the MSI without installing:
+
+```bash
+msiexec /a Slik-Subversion-1.14.2-x64.msi /qn TARGETDIR=C:\path\to\extract
+# svn.exe then sits at C:\path\to\extract\SlikSvn\bin\svn.exe
+```
 
 ### Credentials
 
@@ -62,7 +90,7 @@ directory is a reliable way to commit `.svn` into Git or `.git` into SVN.
 
 ```
 /assets      banners, icons, screenshots      — NOT shipped to users
-/trunk       the current development state    — what gets tagged
+/trunk       a copy of the newest release     — what gets tagged
 /tags/2.0.6  an immutable copy of one release — what users download
 /branches    unused; we do not branch here
 ```
@@ -115,32 +143,33 @@ must match the plugin header"). It does **not** check SVN.
 
 ## 5. Assets
 
-Assets live in `/assets` in SVN and are **excluded from the plugin package** — `release.yml`
-excludes the `Screenshot/` directory from the ZIP, so nothing here reaches a user's site.
+Assets live in **`.wordpress-org/`** in this repository and are copied to `/assets` in SVN. They
+are **excluded from the plugin package** — `release.yml` excludes `.wordpress-org` from the ZIP,
+so nothing here reaches a user's site.
 
-WordPress.org matches assets **by filename**. A file with the wrong name is silently ignored.
+WordPress.org matches assets **by filename**. A file with the wrong name is silently ignored, so
+the files are stored under their final names rather than being renamed at publish time.
 
-| Required filename | Purpose | Status in this repo |
+| Required filename | Purpose | Status |
 |---|---|---|
-| `icon-128x128.png` | directory listing icon | ✅ `Screenshot/icon-128x128.png` |
-| `icon-256x256.png` | retina icon | ✅ `Screenshot/icon-256x256.png` |
-| `banner-772x250.png` | plugin page header | ✅ `Screenshot/banner-772x250.png` |
-| `banner-1544x500.png` | retina header | ✅ `Screenshot/banner-1544x500.png` |
-| `screenshot-1.png` | first screenshot | ❌ **missing** |
-| `screenshot-2.png` | second screenshot | ❌ **missing** |
+| `icon-128x128.png` | directory listing icon | ✅ |
+| `icon-256x256.png` | retina icon | ✅ |
+| `banner-772x250.png` | plugin page header | ✅ |
+| `banner-1544x500.png` | retina header | ✅ |
+| `screenshot-1.png` | settings screen | ✅ |
+| `screenshot-2.png` | diagnostics self-test | ✅ |
 
-> **Action required before first publish.** `readme.txt` declares two screenshots under
-> `== Screenshots ==`, and the numbered captions there are matched to `screenshot-1.png` and
-> `screenshot-2.png` **by number**. The repository has two suitable images —
-> `Screenshot/KloudStack Observability Kloudstack Hosting.png` (the settings screen) and
-> `Screenshot/KloudStack Observability Kloudstack Hosting - Testing.png` (the self-test) — but
-> under names WordPress.org will not look for. Copy them into `/assets` as `screenshot-1.png`
-> and `screenshot-2.png`, in that order, so they match the captions already written.
+> **Screenshot order is fixed by `readme.txt`, not by the files.** The numbered captions under
+> `== Screenshots ==` are matched to `screenshot-N.png` **by number**: caption 1 describes the
+> settings screen, caption 2 the self-test. Swapping the images without editing the captions
+> silently mislabels both — and because `readme.txt` is baked into an immutable tag, correcting
+> the captions means shipping a new version, whereas swapping the PNGs is free.
 >
-> If they are not renamed, the plugin page shows two captions with no images.
+> When replacing a screenshot, open it and check it against the caption it will inherit.
 
 Assets can be committed at any time and take effect within minutes — they are not tied to a
-release.
+release. That is also why the deploy workflow (§11) checks them out from the default branch
+rather than from the tag being published: the newest artwork is always the correct artwork.
 
 ---
 
@@ -242,15 +271,15 @@ Copy this into the release PR or issue.
       (CI fails the build if this is stale)
 - [ ] CI green on `main`
 
-**Before committing to SVN**
+**Before publishing to SVN**
 
 - [ ] GitHub release exists with ZIP + `.sha256`
-- [ ] `sha256sum -c` passes on the downloaded ZIP
 - [ ] Plugin Check run against the **ZIP**, not the repo — no errors at
       `--severity=1 --include-experimental`
-- [ ] `svn status` reviewed line by line; no `.git`, `tests/`, `legacy/`, `vendor/`,
-      `node_modules/`, `composer.*`
-- [ ] `/assets` untouched by this commit unless artwork actually changed
+- [ ] **Deploy workflow run with `dry_run` ticked, and green** (§11)
+- [ ] If publishing by hand instead: `sha256sum -c` passes, and `svn status` reviewed line by
+      line — no `.git`, `tests/`, `legacy/`, `vendor/`, `node_modules/`, `composer.*`
+- [ ] `/assets` unchanged unless artwork actually changed
 
 **After committing**
 
@@ -274,11 +303,20 @@ ends up installed on live sites. Commit the tag first; update `Stable tag` last.
 **Assets are matched by filename, not by content.** `my-screenshot.png` is ignored. Only
 `screenshot-N.png`, `icon-*.png` and `banner-*.png` are recognised.
 
-**The exclude list is case-sensitive.** `release.yml` excludes `Screenshot` with a capital S, and
-the directory in Git is `Screenshot/`. They match today. On Windows the filesystem is
-case-insensitive so a rename to lowercase would look harmless locally and silently start shipping
-the artwork to every user. If that directory is ever renamed, update the exclude in the same
-commit.
+**The exclude list is case-sensitive — and this has already bitten once.** Assets used to live in
+`Screenshot/`, excluded from the ZIP by that exact spelling. Saving new files into `screenshot/`
+on Windows looked identical locally, because the filesystem is case-insensitive and
+`core.ignorecase` hides the difference from `git status` — but CI runs on Linux, where
+`--exclude 'Screenshot'` does not match `screenshot/`, and the next release would have shipped
+~965 KB of artwork inside every user's plugin.
+
+The directory is now `.wordpress-org/`, which removes the trap rather than relocating it:
+
+- it is excluded by name in `release.yml`, as before, **and**
+- it is a dotfile, so `release.yml`'s "Nothing hidden should ship" guard fails the build loudly if
+  it ever reaches the staged package — a second layer `Screenshot/` never had.
+
+Do not reintroduce a non-hidden assets directory.
 
 **Do not commit development files.** `tests/`, `legacy/`, `.github/`, `composer.json`,
 `composer.lock`, `vendor/`, `node_modules/`. The release ZIP already excludes all of these — one
@@ -330,3 +368,54 @@ svn ci -m "Initial release 2.0.6"
 ```
 
 Then work through §6.6 and the "After committing" checklist in §7.
+
+---
+
+## 11. Publishing from GitHub (the normal route)
+
+`.github/workflows/wporg-deploy.yml` does everything in §6 as a manually triggered job, so no SVN
+client, no local checkout, and no credentials on a workstation are needed.
+
+**Actions → Deploy to WordPress.org → Run workflow**
+
+| Input | Meaning |
+|---|---|
+| `tag` | the released tag to publish, e.g. `v2.0.6` |
+| `dry_run` | **defaults to ticked.** Does everything except the final `svn ci` |
+
+It is `workflow_dispatch` only — never automatic on push or on tag. Publishing stays a decision
+someone makes, for the reasons in §1: a release goes out once, when it is ready.
+
+### What it does
+
+1. Checks out the **default branch** for `.wordpress-org/` — assets are live and not tied to a
+   release, so the newest artwork is always correct, including for a tag cut before it existed
+2. Downloads the release ZIP and `.sha256` **for the requested tag** and verifies the checksum —
+   trunk is built from the published artifact, never from a working tree (§6.2)
+3. Fails if the plugin header, the `VERSION` constant, or `readme.txt`'s `Stable tag` inside that
+   ZIP disagree with the version being published
+4. Fails if any of the six required asset filenames is missing
+5. Deploys trunk, `tags/<version>` and `/assets` in one commit
+
+Steps 3 and 4 are deliberately checked against the **artifact**, not the repository. CI already
+checks the repo at tag time; this catches the different failure of publishing the wrong ZIP.
+
+### Secrets
+
+| Secret | Value |
+|---|---|
+| `SVN_USERNAME` | the WordPress.org account username |
+| `SVN_PASSWORD` | a **dedicated SVN password**, generated at <https://wordpress.org/plugins/developers/> |
+
+Use an SVN-specific password, not the account password. It is scoped to SVN and can be revoked and
+regenerated on its own, so a leak is contained and rotation costs nothing. Rotate it if it is ever
+pasted anywhere it should not have been — a chat log, a ticket, a screen share.
+
+Consider putting the job in a GitHub Environment with a required reviewer if you want a second
+pair of eyes on the one action that cannot be undone.
+
+### Always dry run first
+
+`svn ci` is immediate, public and irreversible. The dry run exercises the download, the checksum,
+every version assertion, the asset check and the full SVN checkout and staging — everything except
+the commit. It costs two minutes and is the only rehearsal available.
