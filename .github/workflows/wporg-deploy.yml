@@ -12,8 +12,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Released tag to publish, e.g. v2.0.6'
-        required: true
+        description: 'Tag to publish. Leave BLANK to use the latest GitHub release.'
+        required: false
+        default: ''
       dry_run:
         description: 'Dry run — do everything except the SVN commit'
         type: boolean
@@ -33,17 +34,64 @@ jobs:
       # correct artwork — including for a tag cut before it existed.
       - uses: actions/checkout@v5
 
+      # Leaving the input blank resolves the newest GitHub release, so the normal case is "publish
+      # what we just released" with nothing to type and nothing to mistype. An explicit tag is
+      # still accepted for the unusual case of publishing something other than the newest.
+      #
+      # The tag is read from the environment rather than interpolated into the script: a
+      # ${{ }} expansion is substituted before the shell sees it, so an input containing shell
+      # metacharacters would execute rather than be compared.
       - name: Resolve version
         id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          tag='${{ inputs.tag }}'
+          tag="$INPUT_TAG"
+
+          if [ -z "$tag" ]; then
+            tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+            echo "No tag given — resolved latest release: ${tag}"
+          else
+            echo "Tag given explicitly: ${tag}"
+          fi
+
           case "$tag" in
             v*) ;;
             *) echo "::error::Tag must start with v (got '${tag}')."; exit 1 ;;
           esac
-          echo "tag=${tag}"            >> "$GITHUB_OUTPUT"
-          echo "version=${tag#v}"      >> "$GITHUB_OUTPUT"
+
+          # A hyphen means a prerelease (v2.1.0-rc1). These must never reach WordPress.org: users
+          # would be served a release candidate as the stable version.
+          #
+          # This is checked on the TAG rather than trusting GitHub's prerelease flag, because
+          # release.yml did not set that flag until 2026-08-15 — every RC in this repo is recorded
+          # as a full release, so "latest" would happily resolve to one.
+          case "$tag" in
+            *-*) echo "::error::${tag} looks like a prerelease. WordPress.org serves only stable releases."; exit 1 ;;
+          esac
+
+          echo "tag=${tag}"       >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          echo "### Publishing \`${tag}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      # SVN tags are immutable — /tags/<version> is written once and never edited, because users
+      # who already installed that version and any checksum taken of it both assume it cannot
+      # change. Re-running the workflow for an already-published version is the one way to end up
+      # attempting that, so it is refused here rather than left to the deploy action.
+      - name: Refuse to republish an existing SVN tag
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          url="https://plugins.svn.wordpress.org/kloudstack-azure-observability/tags/${VERSION}/"
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$url")
+          if [ "$code" = "200" ]; then
+            echo "::error::tags/${VERSION} already exists on WordPress.org. Tags are immutable — ship a new version instead."
+            exit 1
+          fi
+          echo "tags/${VERSION} does not exist yet (HTTP ${code}) — safe to publish."
 
       # Trunk is built from the published, checksum-verified release asset — never from a working
       # tree. The ZIP is what CI built and what the reviewer assessed; a checkout could differ by

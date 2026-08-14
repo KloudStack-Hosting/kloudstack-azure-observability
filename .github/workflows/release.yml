@@ -253,6 +253,11 @@ jobs:
             dist/*.sha256
             loader-artifact/kloudstack-obs-loader.php
           generate_release_notes: true
+          # A hyphenated tag (v2.1.0-rc1) is a prerelease. Without this every RC was published as a
+          # full release, so GitHub's "latest release" could resolve to a release candidate — which
+          # the WordPress.org deploy uses when no tag is given. Marking it correctly keeps "latest"
+          # meaning the newest STABLE release.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
             ## Installation
 

@@ -405,8 +405,11 @@ client, no local checkout, and no credentials on a workstation are needed.
 
 | Input | Meaning |
 |---|---|
-| `tag` | the released tag to publish, e.g. `v2.0.6` |
+| `tag` | **leave blank** to publish the latest GitHub release. Set it only to publish something other than the newest |
 | `dry_run` | **defaults to ticked.** Does everything except the final `svn ci` |
+
+Blank is the normal case: there is nothing to type, so there is nothing to mistype, and the
+resolved tag is echoed in the log and the run summary before anything is published.
 
 It is `workflow_dispatch` only — never automatic on push or on tag. Publishing stays a decision
 someone makes, for the reasons in §1: a release goes out once, when it is ready.
@@ -415,15 +418,26 @@ someone makes, for the reasons in §1: a release goes out once, when it is ready
 
 1. Checks out the **default branch** for `.wordpress-org/` — assets are live and not tied to a
    release, so the newest artwork is always correct, including for a tag cut before it existed
-2. Downloads the release ZIP and `.sha256` **for the requested tag** and verifies the checksum —
-   trunk is built from the published artifact, never from a working tree (§6.2)
-3. Fails if the plugin header, the `VERSION` constant, or `readme.txt`'s `Stable tag` inside that
+2. Resolves the tag — the latest GitHub release when the input is blank — and **refuses a
+   prerelease**. A hyphenated tag (`v2.1.0-rc1`) is rejected outright rather than served to users
+   as the stable version
+3. **Refuses to republish an existing SVN tag.** `/tags/<version>` is written once and never
+   edited (§8); re-running the workflow for a published version is the main way that rule gets
+   broken, so it is caught before the deploy action runs
+4. Downloads the release ZIP and `.sha256` for that tag and verifies the checksum — trunk is
+   built from the published artifact, never from a working tree (§6.2)
+5. Fails if the plugin header, the `VERSION` constant, or `readme.txt`'s `Stable tag` inside that
    ZIP disagree with the version being published
-4. Fails if any of the six required asset filenames is missing
-5. Deploys trunk, `tags/<version>` and `/assets` in one commit
+6. Fails if any of the six required asset filenames is missing
+7. Deploys trunk, `tags/<version>` and `/assets` in one commit
 
-Steps 3 and 4 are deliberately checked against the **artifact**, not the repository. CI already
+Steps 5 and 6 are deliberately checked against the **artifact**, not the repository. CI already
 checks the repo at tag time; this catches the different failure of publishing the wrong ZIP.
+
+> The prerelease check reads the **tag**, not GitHub's prerelease flag. `release.yml` did not set
+> that flag until 2026-08-15, so every RC already in this repository is recorded as a full
+> release — "latest" would resolve to one. New releases are flagged correctly; the tag check
+> covers the ones that are not, and costs nothing either way.
 
 ### Secrets
 
