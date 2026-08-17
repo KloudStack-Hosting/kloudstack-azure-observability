@@ -184,8 +184,8 @@ rather than from the tag being published: the newest artwork is always the corre
 Releases are built by CI, not by hand. Tagging is what triggers it:
 
 ```bash
-git tag v2.0.6
-git push origin v2.0.6
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
 
 `release.yml` then builds `kloudstack-azure-observability-<version>.zip`, a `.sha256`
@@ -200,10 +200,12 @@ directory the exclude list would have removed.
 
 ```bash
 # from the SVN checkout
-curl -sSLO https://github.com/KloudStack-Hosting/kloudstack-azure-observability/releases/download/v2.0.6/kloudstack-azure-observability-2.0.6.zip
-curl -sSLO https://github.com/KloudStack-Hosting/kloudstack-azure-observability/releases/download/v2.0.6/kloudstack-azure-observability-2.0.6.zip.sha256
-sha256sum -c kloudstack-azure-observability-2.0.6.zip.sha256   # must print: OK
-unzip -q kloudstack-azure-observability-2.0.6.zip -d /tmp/wporg-build
+V=X.Y.Z
+BASE=https://github.com/KloudStack-Hosting/kloudstack-azure-observability/releases/download/v$V
+curl -sSLO "$BASE/kloudstack-azure-observability-$V.zip"
+curl -sSLO "$BASE/kloudstack-azure-observability-$V.zip.sha256"
+sha256sum -c "kloudstack-azure-observability-$V.zip.sha256"   # must print: OK
+unzip -q "kloudstack-azure-observability-$V.zip" -d /tmp/wporg-build
 ```
 
 The ZIP contains a single top-level directory named after the slug. Its contents — and only its
@@ -240,13 +242,13 @@ svn status          # review carefully before committing
 Copy **server-side** — it is instant and does not re-upload the files:
 
 ```bash
-svn cp trunk tags/2.0.6
+svn cp trunk "tags/$V"
 ```
 
 ### 6.5 Commit
 
 ```bash
-svn ci -m "Release 2.0.6"
+svn ci -m "Release $V"
 ```
 
 One commit for trunk and the tag together. SVN commits are **immediate and public** — there is no
@@ -395,7 +397,10 @@ repository that has since moved on is a live hazard, not a backup.
 Then work through §6.6 and the "After publishing" checklist in §7.
 
 > **History.** 2.0.6 was the first publish; `/trunk`, `/tags` and `/assets` were empty until then.
-> It went out via the §11 workflow at r3646533 on 2026-08-14, after a dry run.
+> It went out via the §11 workflow at r3646533 on 2026-08-14, after a dry run. 2.0.7 followed at
+> r3650386 on 2026-08-17 and was the first release to go through the workflow from end to end —
+> tag, Plugin Check gate, dry run, publish — with the published tag verified byte-for-byte against
+> the checksummed release ZIP.
 
 ---
 
