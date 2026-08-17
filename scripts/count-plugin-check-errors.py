@@ -13,11 +13,22 @@ The output is NOT a single JSON document. It is one section per file — a bare
 Feeding that to json.load() fails on the first `FILE:` line, which is what
 happened on Release #24.
 
+A run that finds nothing prints no sections at all — just wp-cli's
+
+    Success: Checks complete. No errors found.
+
+which is a POSITIVE signal that the scanner ran to completion, and better
+evidence than empty output. Release #26 failed because that line was treated as
+garbage. Completion is now required: either findings were parsed, or that line
+was seen. Output with neither means the scanner did not finish, and is a
+failure rather than a pass — empty output is no longer accepted as clean.
+
 Exit codes are the contract this is used through:
     0  parsed successfully; the error count is on stdout
-    2  could not be parsed — the caller MUST treat this as a failed check, not
-       as a clean result. A scanner that did not run produces no findings, and
-       that is indistinguishable from a pass unless it is checked for.
+    2  could not be parsed, or the run never reported completion — the caller
+       MUST treat this as a failed check, not as a clean result. A scanner that
+       did not run produces no findings, and that is indistinguishable from a
+       pass unless it is checked for.
 
 Codes named in --ignore-codes are counted separately and excluded from the
 total. That exists for checks which cannot pass on a non-tag build by
@@ -30,16 +41,31 @@ import sys
 
 
 def parse(text):
-    """Yield findings from the per-file report format."""
+    """Parse the per-file report format.
+
+    Returns (findings, completed) where `completed` records whether wp-cli
+    reported the run finishing.
+    """
+    findings = []
+    completed = False
+
     for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("FILE:"):
             continue
+        if line.startswith("Success:"):
+            # "Success: Checks complete. No errors found." — the scanner ran and
+            # found nothing. This is the only proof of completion available when
+            # there are no findings to parse.
+            completed = True
+            continue
         if not line.startswith("["):
-            # Anything else is a message from a run that did not complete.
+            # Anything else — a PHP fatal, a wp-cli Error:, a truncated write —
+            # is a run that did not complete, not a clean result.
             raise ValueError(f"unexpected line in report: {line[:120]}")
-        for finding in json.loads(line):
-            yield finding
+        findings.extend(json.loads(line))
+
+    return findings, completed
 
 
 def main():
@@ -53,14 +79,18 @@ def main():
     with open(args.report, encoding="utf-8") as fh:
         text = fh.read()
 
-    if not text.strip():
-        print(0)
-        return 0
-
     try:
-        findings = list(parse(text))
+        findings, completed = parse(text)
     except (ValueError, json.JSONDecodeError) as exc:
         print(f"unparseable Plugin Check output: {exc}", file=sys.stderr)
+        return 2
+
+    # Silence is not success. With no findings AND no completion line there is
+    # nothing to show the scanner ever ran, which is the failure this whole
+    # script exists to tell apart from a clean result.
+    if not findings and not completed:
+        print("Plugin Check reported neither findings nor completion — "
+              "no evidence it ran.", file=sys.stderr)
         return 2
 
     counted = [f for f in findings if f.get("code") not in ignore]
