@@ -136,6 +136,20 @@ jobs:
           done
           [ "$fail" -eq 0 ]
 
+      # workflow_dispatch lets the branch be chosen, and the commit step pushes to main by name.
+      # Run non-dry from a side branch and that branch's content would land on main. A dry run from
+      # anywhere is fine and is how this workflow gets tested, so only the real run is restricted.
+      - name: Refuse to publish from a branch other than the default
+        if: ${{ !inputs.dry_run }}
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]; then
+            echo "::error::Running from '${GITHUB_REF_NAME}'. A real run must be from '${DEFAULT_BRANCH}' — it commits and tags there. Re-run as a dry run, or switch branch."
+            exit 1
+          fi
+
       - name: Commit and tag
         if: ${{ !inputs.dry_run }}
         env:
