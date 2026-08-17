@@ -221,24 +221,50 @@ jobs:
 
           cp -r "${GITHUB_WORKSPACE}/build/${slug}" "wp-content/plugins/${slug}"
 
+          # Preconditions, asserted rather than assumed.
+          #
+          # A scanner that fails to run produces no findings, which is indistinguishable from a
+          # clean result unless the difference is checked for. A gate that reports success because
+          # it never ran is worse than no gate: the release checklist treats a published release as
+          # proof this passed.
+          status=$(wp plugin get plugin-check --field=status --allow-root)
+          if [ "$status" != "active" ]; then
+            echo "::error::plugin-check is '${status}', not active — Plugin Check did not run."
+            exit 1
+          fi
+          test -f "wp-content/plugins/${slug}/${slug}.php" \
+            || { echo "::error::Packaged plugin is not where Plugin Check will look for it."; exit 1; }
+
           echo "--- Plugin Check report (errors AND warnings) ---"
           # Never fails the build: this is the readable report. The gate is the second run.
           wp plugin check "$slug" \
             --severity=1 --include-experimental --allow-root || true
 
-          # The gate. --ignore-warnings leaves only errors, so any result row at all is a failure.
-          # CSV rather than JSON because counting rows does not depend on the shape of the output.
+          # The gate. --ignore-warnings leaves only errors.
+          #
+          # JSON, because it can be told apart from failure: a run that errored writes something
+          # that is not valid JSON, and parsing it fails the build. Empty output is accepted as
+          # clean ONLY because the preconditions above have already established that the scanner
+          # and the plugin are both present.
           wp plugin check "$slug" \
             --severity=1 --include-experimental --ignore-warnings \
-            --format=csv --allow-root > /tmp/pc-errors.csv || true
+            --format=json --allow-root > /tmp/pc-errors.json 2>/tmp/pc-errors.err || true
 
-          errors=$(tail -n +2 /tmp/pc-errors.csv | grep -c . || true)
-          if [ "${errors:-0}" -gt 0 ]; then
-            echo "::error::Plugin Check found ${errors} error(s) in the packaged plugin. See the report above."
-            cat /tmp/pc-errors.csv
+          if [ ! -s /tmp/pc-errors.json ]; then
+            errors=0
+          elif ! errors=$(python3 -c "import json,sys;d=json.load(open('/tmp/pc-errors.json'));print(len(d) if isinstance(d,list) else sum(len(v) for v in d.values()))"); then
+            echo "::error::Plugin Check produced output that could not be parsed — treat as FAILED, not clean."
+            echo "--- stdout ---"; cat /tmp/pc-errors.json
+            echo "--- stderr ---"; cat /tmp/pc-errors.err
             exit 1
           fi
-          echo "✓ Plugin Check: no errors in the packaged plugin"
+
+          if [ "$errors" -gt 0 ]; then
+            echo "::error::Plugin Check found ${errors} error(s) in the packaged plugin. See the report above."
+            cat /tmp/pc-errors.json
+            exit 1
+          fi
+          echo "✓ Plugin Check: no errors in the packaged plugin (scanner verified active)"
 
       # The MU-loader ships separately: the image places it in mu-plugins/, not inside the
       # plugin directory.
