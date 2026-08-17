@@ -1,0 +1,178 @@
+name: Prepare release
+
+# Cuts a release without a terminal and without hand-editing four files.
+#
+# The version lives in four places and they must agree, or CI fails and the package lies about
+# itself. Three are obvious. The fourth is not: the .pot header carries Project-Id-Version, which
+# make-pot derives from the plugin header — so a version bump makes the translation template stale
+# even when no translatable string has changed. That is what turned the 2.0.7 bump red, and it is
+# invisible until CI says so.
+#
+# What this does NOT do is write the changelog. Release notes need a human, so this refuses to run
+# until the entries exist — the mechanical part is automated, the part that needs judgement is not.
+
+run-name: >-
+  ${{ inputs.dry_run && 'Dry run' || 'PREPARE' }} · ${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, WITHOUT the v — e.g. 2.0.8'
+        required: true
+      dry_run:
+        description: 'Dry run — show the diff, change nothing'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0        # tags are needed to refuse a version already released
+
+      - name: Validate the requested version
+        id: v
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          case "$VERSION" in
+            v*) echo "::error::Give the version without the leading v (got '${VERSION}')."; exit 1 ;;
+          esac
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::'${VERSION}' is not X.Y.Z or X.Y.Z-suffix."
+            exit 1
+          fi
+
+          # A published tag is immutable downstream: WordPress.org tags cannot be edited, and the
+          # image pins by tag and checksum-verifies. Re-cutting one is never the right move.
+          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            echo "::error::Tag v${VERSION} already exists. Releases are not re-cut — pick a new version."
+            exit 1
+          fi
+
+          current=$(grep -oP "^const VERSION\s*=\s*'\K[^']+" kloudstack-azure-observability.php)
+          echo "current=${current}"
+          if [ "$current" = "$VERSION" ]; then
+            echo "::error::Already at ${VERSION}."
+            exit 1
+          fi
+          # sort -V puts a prerelease AFTER its release (2.1.0 before 2.1.0-rc1), which is backwards
+          # for semver. Compare on the base version and let a suffix through either way.
+          newest=$(printf '%s\n%s\n' "${current%%-*}" "${VERSION%%-*}" | sort -V | tail -1)
+          if [ "$newest" = "${current%%-*}" ] && [ "${current%%-*}" != "${VERSION%%-*}" ]; then
+            echo "::error::${VERSION} is older than the current ${current}."
+            exit 1
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "current=${current}" >> "$GITHUB_OUTPUT"
+
+      # Release notes are the one part that cannot be generated. Requiring them here means a
+      # release can never ship with a changelog that silently stops at the previous version —
+      # which is what a reader of the plugin page uses to decide whether to update.
+      - name: The changelog must already describe this version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          missing=0
+          grep -qF "= ${VERSION} =" readme.txt || { echo "::error::readme.txt has no '= ${VERSION} =' entry."; missing=1; }
+
+          # Both sections use the same heading, so one match means only one of them has it.
+          count=$(grep -cF "= ${VERSION} =" readme.txt || true)
+          if [ "$count" -lt 2 ]; then
+            echo "::error::readme.txt needs '= ${VERSION} =' under BOTH == Changelog == and == Upgrade Notice == (found ${count})."
+            missing=1
+          fi
+          [ "$missing" -eq 0 ] || {
+            echo "Add the entries first — edit readme.txt in the browser and commit, then re-run."
+            exit 1
+          }
+          echo "✓ changelog and upgrade notice present for ${VERSION}"
+
+      - name: Bump all four version declarations
+        env:
+          VERSION: ${{ inputs.version }}
+          CURRENT: ${{ steps.v.outputs.current }}
+        run: |
+          set -euo pipefail
+          plugin=kloudstack-azure-observability.php
+          pot=languages/kloudstack-azure-observability.pot
+
+          sed -i -E "s|^( \* Version:[[:space:]]+).*|\1${VERSION}|"                 "$plugin"
+          sed -i -E "s|^(const VERSION[[:space:]]*=[[:space:]]*').*(';)|\1${VERSION}\2|" "$plugin"
+          sed -i -E "s|^(Stable tag:[[:space:]]*).*|\1${VERSION}|"                  readme.txt
+          # The invisible one. make-pot derives this from the plugin header, so it goes stale on a
+          # version bump alone and CI fails "Translation template is current".
+          #
+          # Matches up to the first backslash rather than trying to match the literal \n" tail:
+          # anchoring on the tail silently matched nothing, and rebuilding the whole line dropped
+          # the \n" and corrupted the header. This keeps the tail untouched.
+          sed -i -E "s|^(\"Project-Id-Version: KloudStack Observability for Azure )[^\\\\]*|\1${VERSION}|" "$pot"
+
+          echo "--- what changed ---"
+          git --no-pager diff
+
+          echo "--- all four must now read ${VERSION} ---"
+          h=$(grep -oP '^\s*\*\s*Version:\s*\K.+' "$plugin" | tr -d '[:space:]')
+          c=$(grep -oP "^const VERSION\s*=\s*'\K[^']+" "$plugin")
+          s=$(grep -oP '^Stable tag:\s*\K.+' readme.txt | tr -d '[:space:]')
+          p=$(grep -oP '^"Project-Id-Version: KloudStack Observability for Azure \K[^\\]+' "$pot")
+          printf '  plugin header : %s\n  VERSION const : %s\n  Stable tag    : %s\n  .pot          : %s\n' "$h" "$c" "$s" "$p"
+
+          fail=0
+          for pair in "plugin-header:$h" "VERSION-const:$c" "stable-tag:$s" "pot:$p"; do
+            [ "${pair#*:}" = "$VERSION" ] || { echo "::error::${pair%%:*} is '${pair#*:}', expected '${VERSION}'."; fail=1; }
+          done
+          [ "$fail" -eq 0 ]
+
+      - name: Commit and tag
+        if: ${{ !inputs.dry_run }}
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          git add kloudstack-azure-observability.php readme.txt languages/kloudstack-azure-observability.pot
+          git commit -m "chore(release): ${VERSION}"
+          git push origin HEAD:main
+
+          # Pushing the tag is what starts Release, which builds, runs Plugin Check and publishes.
+          git tag -a "v${VERSION}" -m "v${VERSION}"
+          git push origin "v${VERSION}"
+
+      - name: Summary
+        if: always()
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          {
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "## Dry run — ${VERSION}"
+              echo ""
+              echo "Nothing was committed. The diff above is what would be applied."
+              echo ""
+              echo "Re-run with \`dry_run\` unticked to commit and tag."
+            else
+              echo "## Prepared ${VERSION}"
+              echo ""
+              echo "Committed the version bump and pushed \`v${VERSION}\`, which starts **Release**."
+              echo ""
+              echo "Next, once Release is green:"
+              echo "1. **Deploy to WordPress.org** — tag blank, dry run ticked"
+              echo "2. Same again, dry run unticked"
+              echo "3. Bump \`observability-version.txt\` to \`v${VERSION}\` in the image repo"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
