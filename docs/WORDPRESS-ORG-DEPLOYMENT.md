@@ -278,8 +278,9 @@ Copy this into the release PR or issue.
 **Before publishing to SVN**
 
 - [ ] GitHub release exists with ZIP + `.sha256`
-- [ ] Plugin Check run against the **ZIP**, not the repo — no errors at
-      `--severity=1 --include-experimental`
+      *(Plugin Check now runs inside `release.yml` against the staged package at
+      `--severity=1 --include-experimental` and fails the build on errors, so a release existing
+      means it passed. Nothing to run by hand.)*
 - [ ] **Deploy workflow run with `dry_run` ticked, and green** (§11)
 - [ ] If publishing by hand instead: `sha256sum -c` passes, and `svn status` reviewed line by
       line — no `.git`, `tests/`, `legacy/`, `vendor/`, `node_modules/`, `composer.*`

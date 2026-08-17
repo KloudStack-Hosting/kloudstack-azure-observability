@@ -24,6 +24,22 @@ jobs:
     name: Build plugin package
     runs-on: ubuntu-latest
 
+    # Plugin Check runs inside a real WordPress install — it is a WordPress plugin, not a linter —
+    # so the job needs a database. Nothing else here touches it.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
     steps:
       - uses: actions/checkout@v5
 
@@ -165,6 +181,64 @@ jobs:
           unzip -l "dist/${slug}-${version}.zip"
           echo "--- checksum ---"
           cat "dist/${slug}-${version}.zip.sha256"
+
+      # ── WordPress.org Plugin Check ────────────────────────────────────────────────
+      # The scanner WordPress.org runs against submissions. It was previously run by hand before
+      # submitting, which meant it was only ever run when someone remembered — and a check nobody
+      # is obliged to run is not a gate.
+      #
+      # It runs against build/<slug>, the STAGED package, not the repository. That is the whole
+      # point: the staged copy is what goes into the ZIP, into SVN and onto users' sites, and it
+      # differs from the working tree by everything the exclude list removed. Checking the repo
+      # would scan files that never ship, and miss the thing that does.
+      #
+      # Placed before "Publish release", so a package with errors cannot become a downloadable
+      # release.
+      #
+      # Note this pulls the current Plugin Check from WordPress.org rather than pinning it. That is
+      # deliberate — the point is to be measured against today's rules, the same ones a reviewer
+      # would apply — but it does mean a new Plugin Check release can fail a build without this
+      # repository having changed. The report in the log says which rule.
+      - name: Plugin Check against the packaged plugin
+        run: |
+          set -euo pipefail
+          slug="kloudstack-azure-observability"
+
+          curl -sSLo /tmp/wp https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+          chmod +x /tmp/wp
+          sudo mv /tmp/wp /usr/local/bin/wp
+
+          mkdir -p /tmp/pc-wp
+          cd /tmp/pc-wp
+          wp core download --quiet --allow-root
+          wp config create --dbname=wordpress --dbuser=root --dbpass=root \
+            --dbhost=127.0.0.1 --quiet --allow-root
+          wp core install --url=http://localhost --title="Plugin Check" \
+            --admin_user=admin --admin_password=plugincheck \
+            --admin_email=ci@example.invalid --skip-email --quiet --allow-root
+
+          wp plugin install plugin-check --activate --quiet --allow-root
+
+          cp -r "${GITHUB_WORKSPACE}/build/${slug}" "wp-content/plugins/${slug}"
+
+          echo "--- Plugin Check report (errors AND warnings) ---"
+          # Never fails the build: this is the readable report. The gate is the second run.
+          wp plugin check "$slug" \
+            --severity=1 --include-experimental --allow-root || true
+
+          # The gate. --ignore-warnings leaves only errors, so any result row at all is a failure.
+          # CSV rather than JSON because counting rows does not depend on the shape of the output.
+          wp plugin check "$slug" \
+            --severity=1 --include-experimental --ignore-warnings \
+            --format=csv --allow-root > /tmp/pc-errors.csv || true
+
+          errors=$(tail -n +2 /tmp/pc-errors.csv | grep -c . || true)
+          if [ "${errors:-0}" -gt 0 ]; then
+            echo "::error::Plugin Check found ${errors} error(s) in the packaged plugin. See the report above."
+            cat /tmp/pc-errors.csv
+            exit 1
+          fi
+          echo "✓ Plugin Check: no errors in the packaged plugin"
 
       # The MU-loader ships separately: the image places it in mu-plugins/, not inside the
       # plugin directory.
