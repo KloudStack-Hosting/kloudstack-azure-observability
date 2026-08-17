@@ -4,7 +4,7 @@ Tags: application insights, azure, monitoring, observability, telemetry
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.0.6
+Stable tag: 2.0.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -137,6 +137,14 @@ manually in settings.
 
 == Changelog ==
 
+= 2.0.7 =
+* The Debug log setting now explains what it actually takes to get output. Turning it on does
+  nothing by itself: WP_DEBUG and WP_DEBUG_LOG both have to be enabled in wp-config.php, and
+  WP_DEBUG_DISPLAY should be turned off so errors are written to the log rather than printed on
+  the page where visitors would see them. The description now names those three lines, says
+  entries are prefixed [kloudstack-obs] and land in wp-content/debug.log, and notes that the log
+  is never rotated — so it should be turned off again once troubleshooting is finished.
+
 = 2.0.6 =
 * The Debug log setting now says plainly that it does nothing on its own, and names the
   define( 'WP_DEBUG', true ); line that has to be added to wp-config.php for it to take effect.
@@ -175,6 +183,10 @@ manually in settings.
 * Initial public release.
 
 == Upgrade Notice ==
+
+= 2.0.7 =
+Wording only — the Debug log setting now names the wp-config.php lines needed for it to produce
+output, and where the entries land.
 
 = 2.0.6 =
 Wording only — the Debug log setting now explains that WP_DEBUG must be enabled separately.
