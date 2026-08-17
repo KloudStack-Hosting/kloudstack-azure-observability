@@ -270,7 +270,9 @@ Copy this into the release PR or issue.
 - [ ] Version bumped in all four places (§4)
 - [ ] `readme.txt` changelog and `== Upgrade Notice ==` entries added
 - [ ] `Tested up to:` still accurate for the current WordPress release
-- [ ] `.pot` regenerated if any translatable string changed —
+- [ ] `.pot` regenerated — **on every version bump, not only when a string changed.** Its
+      `Project-Id-Version` header carries the plugin version, so bumping the version alone makes
+      it stale and CI fails the "Translation template is current" job —
       `wp i18n make-pot . languages/kloudstack-azure-observability.pot --slug=kloudstack-azure-observability --domain=kloudstack-azure-observability --exclude=vendor,tests,benchmark,docs,scripts,legacy,loader,node_modules`
       (CI fails the build if this is stale)
 - [ ] CI green on `main`
