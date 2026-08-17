@@ -70,7 +70,13 @@ jobs:
             # commits reporting the same version is indistinguishable from inside WordPress —
             # the diagnostics report and the sdkVersion in Azure both show only this string, so
             # without it there is no way to tell whether a fix is actually deployed.
-            version="${{ github.event.inputs.version }}+${GITHUB_SHA::7}"
+            #
+            # Separated with '-', not '+'. A WordPress plugin "Version" header may contain only
+            # numbers, letters, periods and hyphens, so the '+' used previously made every dev
+            # build's header invalid — Plugin Check flags it as plugin_header_invalid_plugin_version.
+            # It never reached a release (tagged builds are exactly the tag), but it made dev
+            # builds fail a check for a reason that had nothing to do with the code.
+            version="${{ github.event.inputs.version }}-${GITHUB_SHA::7}"
           fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "Building version ${version}"
@@ -242,18 +248,35 @@ jobs:
 
           # The gate. --ignore-warnings leaves only errors.
           #
-          # JSON, because it can be told apart from failure: a run that errored writes something
-          # that is not valid JSON, and parsing it fails the build. Empty output is accepted as
-          # clean ONLY because the preconditions above have already established that the scanner
-          # and the plugin are both present.
+          # The report is parsed by scripts/count-plugin-check-errors.py rather than inline,
+          # because the format is not a single JSON document — it is a bare "FILE:" line followed
+          # by a JSON array, once per file. Parsing it as one document is what failed on
+          # Release #24. Unparseable output exits 2 there and fails the build here: a scanner that
+          # did not run produces no findings, which reads exactly like a pass unless checked for.
+          #
+          # Two checks CANNOT pass on a non-tag build, by construction. A dispatch build stamps a
+          # synthetic version so successive dev builds are distinguishable, and that version is
+          # necessarily not the readme's Stable tag. They are ignored only when this is not a tag;
+          # on a real release both are enforced, because there version == tag == Stable tag.
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            ignore_codes=""
+          else
+            ignore_codes="stable_tag_mismatch"
+            echo "Non-tag build: stable_tag_mismatch is expected and will be reported, not enforced."
+          fi
+
           wp plugin check "$slug" \
             --severity=1 --include-experimental --ignore-warnings \
             --format=json --allow-root > /tmp/pc-errors.json 2>/tmp/pc-errors.err || true
 
-          if [ ! -s /tmp/pc-errors.json ]; then
-            errors=0
-          elif ! errors=$(python3 -c "import json,sys;d=json.load(open('/tmp/pc-errors.json'));print(len(d) if isinstance(d,list) else sum(len(v) for v in d.values()))"); then
-            echo "::error::Plugin Check produced output that could not be parsed — treat as FAILED, not clean."
+          set +e
+          errors=$(python3 "${GITHUB_WORKSPACE}/scripts/count-plugin-check-errors.py" \
+            /tmp/pc-errors.json --ignore-codes="$ignore_codes")
+          rc=$?
+          set -e
+
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::Plugin Check output could not be parsed — treat as FAILED, not clean."
             echo "--- stdout ---"; cat /tmp/pc-errors.json
             echo "--- stderr ---"; cat /tmp/pc-errors.err
             exit 1
@@ -261,7 +284,6 @@ jobs:
 
           if [ "$errors" -gt 0 ]; then
             echo "::error::Plugin Check found ${errors} error(s) in the packaged plugin. See the report above."
-            cat /tmp/pc-errors.json
             exit 1
           fi
           echo "✓ Plugin Check: no errors in the packaged plugin (scanner verified active)"
