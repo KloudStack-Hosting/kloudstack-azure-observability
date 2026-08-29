@@ -210,8 +210,25 @@ kloudstack.com.au is W3TC Disk: Enhanced. W3TC config varies per site, so if klo
 that is a better test, not a worse one — capture its Page Cache screen before starting and record the
 mode here.
 
+### Purge the page cache after installing — before checking anything
+
+Installing the plugin does not invalidate W3TC's page cache, so anonymous visitors keep receiving
+HTML rendered by the previous build until the entry expires. On kloudstack.com.au that is 3600s
+(Maximum lifetime of cache objects), and it produced a false failure during testing: the site served
+a frozen `operationId` after the fix was installed, which looked exactly like the fix not working.
+
+Two markers tell stale HTML from a real failure, and both are worth capturing before concluding
+anything:
+
+- `disablePageUnloadEvents` is absent — it exists only in builds carrying this fix.
+- `disableCookiesUsage` disagrees with what the settings page reports.
+
+**Performance → Purge All Caches, then re-test.** This applies to any plugin change that alters
+emitted HTML, not just this one.
+
 | # | Check | Method | Pass |
 |---|---|---|---|
+| 0 | Page cache purged after install | Performance → Purge All Caches | served HTML contains `disablePageUnloadEvents` |
 | 1 | Correlation absent from cached HTML | `curl` 3× different UAs | no `operationId` in any response |
 | 2 | Browser trace ids unique | 3 real page loads, check `operation_Id` | 3 distinct values |
 | 3 | Logged-in correlation preserved | load while logged in | `operationId` present, matches server span |
