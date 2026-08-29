@@ -72,6 +72,11 @@ final class Upgrade
         // either way, and through Settings so a host forcing it on by filter also counts.
         if ($isUpgrade && !self::ownerHasChosen() && !(new Settings())->bool('enabled')) {
             update_option(self::NOTICE_OPTION, '1');
+        } else {
+            // Clears a notice that no longer applies -- including one left behind by the version
+            // that raised it wrongly. Without this, a site that was told telemetry was off while it
+            // was on keeps being told so until someone dismisses it by hand.
+            delete_option(self::NOTICE_OPTION);
         }
 
         update_option(self::VERSION_OPTION, VERSION);

@@ -105,6 +105,20 @@ final class UpgradeTest extends TestCase
         self::assertTrue(Upgrade::noticeIsPending());
     }
 
+    public function testTheNextUpgradeClearsAStaleNotice(): void
+    {
+        // A site that received the wrong notice must be released from it by the upgrade that fixes
+        // the bug, not left to dismiss it by hand.
+        update_option(PREFIX . 'connection_string', 'InstrumentationKey=abc');
+        update_option(PREFIX . 'enabled', '1');
+        update_option(PREFIX . 'optin_notice', '1');
+        update_option(PREFIX . 'version', '2.0.8-dev-old');
+
+        Upgrade::maybeRun();
+
+        self::assertFalse(Upgrade::noticeIsPending());
+    }
+
     public function testFirstInstallIsSilent(): void
     {
         Upgrade::maybeRun();
