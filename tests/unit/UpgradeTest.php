@@ -78,6 +78,33 @@ final class UpgradeTest extends TestCase
         self::assertTrue(Upgrade::noticeIsPending(), 'The owner must be told telemetry is now off.');
     }
 
+    public function testNoNoticeWhenTelemetryIsAlreadyOn(): void
+    {
+        // Caught on kloudstack.dev: the notice announced "telemetry is currently off on this site"
+        // on a site where both switches were plainly on. The condition tested only whether the
+        // owner had saved the settings page, and that marker is introduced by this very version --
+        // so it is absent on every existing install, and the notice fired for all of them.
+        update_option(PREFIX . 'connection_string', 'InstrumentationKey=abc');
+        update_option(PREFIX . 'enabled', '1');
+
+        Upgrade::maybeRun();
+
+        self::assertFalse(
+            Upgrade::noticeIsPending(),
+            'A site with telemetry switched on has lost nothing and must not be told otherwise.'
+        );
+    }
+
+    public function testNoticeStillRaisedWhenTelemetryIsActuallyOff(): void
+    {
+        update_option(PREFIX . 'connection_string', 'InstrumentationKey=abc');
+        update_option(PREFIX . 'enabled', '');
+
+        Upgrade::maybeRun();
+
+        self::assertTrue(Upgrade::noticeIsPending());
+    }
+
     public function testFirstInstallIsSilent(): void
     {
         Upgrade::maybeRun();

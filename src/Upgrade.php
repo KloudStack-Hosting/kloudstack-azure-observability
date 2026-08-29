@@ -65,9 +65,12 @@ final class Upgrade
 
         self::materialiseDefaults();
 
-        // Only worth raising where telemetry could actually run: a site with no connection string
-        // has a different and already-reported problem.
-        if ($isUpgrade && !self::ownerHasChosen()) {
+        // Three conditions, and the last one is the one this originally got wrong: the notice
+        // announced that telemetry was off on sites where it was plainly on, because it tested only
+        // whether the owner had saved the settings page — and the marker for that is new, so it is
+        // absent on every existing install. Read after materialiseDefaults(), so the option exists
+        // either way, and through Settings so a host forcing it on by filter also counts.
+        if ($isUpgrade && !self::ownerHasChosen() && !(new Settings())->bool('enabled')) {
             update_option(self::NOTICE_OPTION, '1');
         }
 
