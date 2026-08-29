@@ -100,6 +100,19 @@ final class SnippetInjector
         $config['disableAjaxTracking']     = false;
         $config['enableCorsCorrelation']   = true;
 
+        /*
+         * Chromium refuses 'unload' listeners under Permissions Policy — Chrome rolling out to all
+         * origins through September 2026, Edge from September. The SDK hooks beforeunload, unload
+         * and pagehide together, so the refusal logs a console violation on every page view while
+         * changing nothing: the other two events still carry the flush. Excluding it removes the
+         * violation from every visitor's console and makes the page eligible for the back/forward
+         * cache, which an unload listener otherwise disqualifies it from.
+         *
+         * SDK 3.4.3 reads this in AISku and passes it as the excludeEvents argument to
+         * addPageUnloadEventListener, so it applies to the listener that actually violates.
+         */
+        $config['disablePageUnloadEvents'] = ['unload'];
+
         // Off unless opted in — enabling these transmits cookies and authorization headers.
         $headerTracking                       = $this->settings->bool('header_tracking');
         $config['enableRequestHeaderTracking']  = $headerTracking;
@@ -136,11 +149,16 @@ final class SnippetInjector
             return;
         }
 
-        $context = wp_json_encode([
-            'operationId' => $this->correlation->operationId(),
-            'parentId'    => $this->correlation->parentId(),
-            'role'        => $this->azure->role(),
-        ], JSON_UNESCAPED_SLASHES);
+        // The cloud role is a property of the site, not of this request, so it is always safe to
+        // cache. The trace context is not — see correlationSurvivesCaching().
+        $contextData = ['role' => $this->azure->role()];
+
+        if (self::correlationSurvivesCaching()) {
+            $contextData['operationId'] = $this->correlation->operationId();
+            $contextData['parentId']    = $this->correlation->parentId();
+        }
+
+        $context = wp_json_encode($contextData, JSON_UNESCAPED_SLASHES);
 
         if (!is_string($context)) {
             return;
@@ -187,6 +205,54 @@ final class SnippetInjector
         );
 
         self::registerNonceFilter($handle);
+    }
+
+    /**
+     * Whether this response's trace context can safely be written into the HTML.
+     *
+     * It usually cannot. The trace id is generated per PHP request, but the HTML carrying it is
+     * stored by the page cache and replayed to every later visitor, so one request's id ends up
+     * stamped on thousands of unrelated page views. Observed in production: three requests with
+     * different user agents returned an identical operationId, and a real Chrome page view in
+     * Application Insights carried the same id as the cached HTML.
+     *
+     * The result is worse than a missing link. On a cache hit PHP never runs, so no server span
+     * exists for that visit at all — the correlation is not stale, it is invented, and the
+     * workbook's browser-to-server join returns wrong rows rather than no rows. Application
+     * Insights also hashes operation_Id to decide sampling, so one shared id collapses
+     * per-page-view sampling into a single site-wide keep-or-drop decision.
+     *
+     * So it is emitted only where PHP demonstrably handles every request for this response. That
+     * list is deliberately short, because the alternative is enumerating every page cache a site
+     * might install — W3TC, WP Rocket, LiteSpeed, WP Super Cache — plus every reverse proxy in
+     * front of it, and being wrong about any one of them reintroduces the defect. DONOTCACHEPAGE is
+     * the nearest thing to a standard and is honoured by all of the above.
+     *
+     * Little is lost by omitting it. With no override the SDK generates its own operation id per
+     * page view, which is correct under any cache, and correlation still happens in the other
+     * direction: the SDK sends a W3C traceparent on XHR and fetch and Correlation adopts it, so
+     * REST, admin-ajax and other dynamic calls correlate normally. Those are never page-cached.
+     */
+    private static function correlationSurvivesCaching(): bool
+    {
+        $method = isset($_SERVER['REQUEST_METHOD']) && is_string($_SERVER['REQUEST_METHOD'])
+            ? strtoupper(sanitize_text_field(wp_unslash($_SERVER['REQUEST_METHOD'])))
+            : 'GET';
+
+        $uncacheable = (function_exists('is_user_logged_in') && is_user_logged_in())
+            || (defined('DONOTCACHEPAGE') && DONOTCACHEPAGE)
+            || $method !== 'GET';
+
+        /**
+         * Filters whether this response is known not to be page-cached, and so whether the server's
+         * trace context may be embedded in it.
+         *
+         * Override this only if you know the response is never cached — by a plugin, a reverse
+         * proxy or a CDN. Forcing it true on a cached page restores the defect it prevents.
+         *
+         * @param bool $uncacheable Whether the response is known not to be cacheable.
+         */
+        return (bool) apply_filters('kloudstack_obs_response_is_uncacheable', $uncacheable);
     }
 
     /**
