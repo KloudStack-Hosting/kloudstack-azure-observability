@@ -296,12 +296,21 @@ delete.
 
 ## 9. Open items — not blocking
 
-**Telemetry volume unexplained.** `kloudstackProd` shows single-digit pageViews over the 30 days that
-exist, with browser telemetry always on. Ruled out: the daily cap (workspace ingests ~1–2 MB/day
-against a 1 GB cap, no cap events in 30 days) and plugin-side sampling (100%). Ingestion sampling
-accounts for two thirds, not the remainder. Compare GA4 sessions for `G-V9DRDK2NML` over the same
-window to size whatever is left — low traffic, ad-blockers blocking Azure Monitor endpoints, or a
-third defect.
+**Telemetry volume — RETRACTED, there was never a problem.** This section previously claimed
+`kloudstackProd` was producing only single-digit pageViews over 30 days. That was a measurement
+error, not a finding.
+
+`az monitor app-insights query` applies `--offset`, **which defaults to 1h**, and it is intersected
+with whatever `ago()` the KQL contains. Every query run during this investigation was therefore
+capped to the last hour no matter what range the KQL asked for, and the results were read as 30- and
+90-day totals.
+
+The real 7-day figures: `kloudstackProd` 94 pageViews, 77 browserTimings, 3627 requests;
+`appi-kloudstacklabs` 47 pageViews, 37 browserTimings, 7424 requests. Entirely healthy. There is no
+third factor to chase and no need to compare against GA4.
+
+**Always pass an explicit `--offset` (or `--start-time`/`--end-time`) to that command.** A query that
+silently returns one hour of data looks exactly like a query that returns a correct empty result.
 
 **Ingestion sampling 33.3%.** Deliberate, for cost. Leave as-is; the correlation fix makes it valid.
 Worth revisiting later purely on the numbers — at ~1.5 MB/day it saves cents per month while
