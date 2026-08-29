@@ -8,6 +8,47 @@ The telemetry schema is versioned independently — see the functional specifica
 
 ## [Unreleased]
 
+### Fixed
+- **Settings no longer appear to reset when the plugin updates.** v2.0.1 changed the telemetry
+  defaults from true to false to satisfy WordPress.org guidelines 7 and 9. Settings are stored as
+  individual options, so a site that had never pressed "Save Changes" had nothing in the database
+  and ran on the defaults in code — and that change stopped telemetry on every such install without
+  a word. Defaults are now written to the options table, so the database rather than a constant
+  decides what an existing install does, and a future default change cannot reach backwards. Where
+  an upgrade finds telemetry off that the owner never chose to turn off, a dismissible notice says
+  so. Telemetry is never re-enabled automatically: doing that would recreate exactly what the review
+  objected to.
+
+  The plugin previously had no way to detect an upgrade at all — no stored version, no upgrade
+  routine, and `kloudstack_obs_schema_version` listed in `uninstall.php` while never being written
+  by anything. It now stores a version and compares it on `plugins_loaded`, which is what WordPress
+  core does with `db_version`; activation hooks do not fire on update and never fire at all for a
+  must-use plugin, which is how managed stacks load this.
+- **Toggles that default on can be switched off again.** An unchecked box saves as an empty string,
+  which was being coerced back to the default — so "Cookie-less browser telemetry", "Anonymise
+  visitor IP addresses" and "Track admin requests" silently refused to turn off and redrew
+  themselves ticked. `cookieless` was the costly one: turning it off is the documented route to
+  session and returning-visitor aggregation, and that was unreachable.
+- **Browser telemetry no longer reports every visitor as one trace.** The server's trace context was
+  written into the page body, so a page cache stored it and replayed it to everyone — one request's
+  operation id stamped on thousands of unrelated page views. On a cache hit PHP never runs, so no
+  server span exists for that visit at all: the correlation was invented rather than stale, and the
+  workbook's browser-to-server join returned wrong rows rather than none. Application Insights also
+  hashes `operation_Id` to decide sampling, so one shared id collapsed per-page-view sampling into a
+  single site-wide keep-or-drop decision.
+
+  The trace context is now emitted only where PHP demonstrably handles every request — logged-in
+  users, `DONOTCACHEPAGE`, non-GET — with the `kloudstack_obs_response_is_uncacheable` filter for
+  hosts that know their own caching. Everywhere else the SDK generates its own operation id per page
+  view, which is correct under any cache. Correlation still works in the other direction, and always
+  did: the SDK sends a W3C traceparent on XHR and fetch and `Correlation` adopts it, so REST,
+  admin-ajax and other dynamic calls correlate normally. This needs no cache-plugin detection and
+  behaves the same under W3TC in any mode, WP Rocket, LiteSpeed, WP Super Cache, a CDN or Front Door.
+- **The `unload` console violation is gone.** Chromium now refuses `unload` listeners under
+  Permissions Policy, and the SDK hooks it alongside `beforeunload` and `pagehide`, logging a
+  violation on every page view while changing nothing. `disablePageUnloadEvents` now excludes it,
+  which also makes pages eligible for the back/forward cache.
+
 ### Changed
 - **Browser telemetry is now opt-in.** `client_enabled` defaults to `false`. Enabling it loads
   Microsoft's Application Insights JavaScript SDK into every visitor's browser, which
