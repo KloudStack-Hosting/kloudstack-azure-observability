@@ -9,6 +9,7 @@ use KloudStack\Observability\Plugin;
 use KloudStack\Observability\Settings;
 use KloudStack\Observability\Support\Guard;
 use KloudStack\Observability\Telemetry\Privacy;
+use KloudStack\Observability\Upgrade;
 
 use const KloudStack\Observability\PREFIX;
 use const KloudStack\Observability\SLUG;
@@ -161,6 +162,10 @@ final class SettingsPage
                 sanitize_text_field(wp_unslash((string) $_POST['connection_string']))
             );
         }
+
+        // Records that these values are a deliberate choice rather than inherited defaults, so a
+        // later change of default does not silently rewrite them and the upgrade notice stays quiet.
+        Upgrade::recordUserSaved();
 
         $this->settings->reset();
         $this->config->reset();
@@ -478,7 +483,8 @@ final class SettingsPage
         return substr($value, 0, 8) . str_repeat('•', 12) . substr($value, -4);
     }
 
-    private static function pageUrl(): string
+    /** Public so the upgrade notice can link here without duplicating the slug. */
+    public static function pageUrl(): string
     {
         return admin_url('tools.php?page=' . SLUG);
     }

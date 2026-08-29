@@ -163,4 +163,47 @@ final class SettingsTest extends TestCase
 
         self::assertSame(100, (new Settings())->samplingRate());
     }
+
+    /**
+     * @dataProvider togglesThatDefaultOn
+     */
+    public function testAToggleThatDefaultsOnCanActuallyBeTurnedOff(string $key): void
+    {
+        // The settings form writes '' for an unchecked box. Coercing '' back to the default made
+        // every toggle whose default is true impossible to switch off: the value round-tripped to
+        // true and the checkbox redrew itself ticked. Nothing covered this, because the two
+        // existing cases happen to use an int setting and a toggle that defaults to false.
+        //
+        // cookieless is the one that mattered most — the settings page documents turning it off as
+        // the way to get session and returning-visitor aggregation, and that was unreachable.
+        WPStubs::$options['kloudstack_obs_' . $key] = '';
+
+        self::assertFalse(
+            (new Settings())->bool($key),
+            sprintf('"%s" defaults on, so an empty stored value must mean the owner cleared it.', $key)
+        );
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public function togglesThatDefaultOn(): array
+    {
+        return [
+            'cookieless'   => ['cookieless'],
+            'anonymise_ip' => ['anonymise_ip'],
+            'track_admin'  => ['track_admin'],
+        ];
+    }
+
+    public function testAnUnwrittenToggleStillReadsItsDefault(): void
+    {
+        // The other half of the same rule: absent must still mean the default, or the fix would
+        // have turned IP anonymisation off for every site that never opened the settings page.
+        $settings = new Settings();
+
+        self::assertTrue($settings->bool('cookieless'));
+        self::assertTrue($settings->bool('anonymise_ip'));
+        self::assertTrue($settings->bool('track_admin'));
+    }
 }

@@ -95,12 +95,19 @@ final class Plugin
         $this->booted = true;
 
         Guard::run(function (): void {
+            // Runs before any setting is read. Materialises defaults into the options table so the
+            // database — not a constant in this file — decides what an existing install does. This
+            // is the only hook that works for both load modes: activation hooks do not fire on
+            // update, and never fire at all for a must-use plugin.
+            Upgrade::maybeRun();
+
             // Bridge the saved 'debug_log' option to the filter Log::enabled() reads. This MUST run
             // before anything logs, because Log memoises enabled() on first use — without it the
             // "Debug log" settings toggle writes its option but never actually enables logging.
             add_filter('kloudstack_obs_debug_log', fn (): bool => $this->settings->bool('debug_log'));
 
             $this->registerAdmin();
+            $this->registerOptInNotice();
 
             if (!$this->config->isConfigured()) {
                 $this->registerUnconfiguredNotice();
@@ -239,6 +246,60 @@ final class Plugin
      * connection string arrives from the environment and an empty value means a provisioning
      * problem rather than a configuration one.
      */
+    /**
+     * Tell the owner when an upgrade left telemetry off without them ever choosing that.
+     *
+     * v2.0.1 flipped the telemetry defaults to false for WordPress.org guidelines 7 and 9. On any
+     * install that had never saved the settings page, nothing was stored, so that flip stopped
+     * telemetry silently. Turning it back on automatically would recreate exactly what the review
+     * objected to, so the plugin says so instead and leaves the choice where it belongs.
+     *
+     * Dismissible, and dismissal is remembered — a notice that returns on every page load is a
+     * notice people learn to ignore.
+     */
+    private function registerOptInNotice(): void
+    {
+        if (!is_admin() || !Upgrade::noticeIsPending()) {
+            return;
+        }
+
+        add_action('admin_init', Guard::wrap(static function (): void {
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- presence check only; check_admin_referer() below is the actual verification.
+            if (!isset($_GET[PREFIX . 'dismiss_notice']) || !current_user_can('manage_options')) {
+                return;
+            }
+
+            check_admin_referer(PREFIX . 'dismiss_notice');
+            Upgrade::dismissNotice();
+
+            wp_safe_redirect(remove_query_arg([PREFIX . 'dismiss_notice', '_wpnonce']));
+            exit;
+        }, 'admin.optin_notice_dismiss'));
+
+        add_action('admin_notices', Guard::wrap(static function (): void {
+            if (!current_user_can('manage_options')) {
+                return;
+            }
+
+            $dismiss = wp_nonce_url(
+                add_query_arg(PREFIX . 'dismiss_notice', '1'),
+                PREFIX . 'dismiss_notice'
+            );
+
+            printf(
+                '<div class="notice notice-warning"><p>%s</p><p><a href="%s" class="button button-primary">%s</a> <a href="%s">%s</a></p></div>',
+                esc_html__(
+                    'KloudStack Observability for Azure now requires telemetry to be switched on explicitly, so it is currently off on this site. Earlier versions defaulted it on, which WordPress.org guidelines do not allow. Nothing is being collected until you enable it.',
+                    'kloudstack-azure-observability'
+                ),
+                esc_url(Admin\SettingsPage::pageUrl()),
+                esc_html__('Review telemetry settings', 'kloudstack-azure-observability'),
+                esc_url($dismiss),
+                esc_html__('Dismiss', 'kloudstack-azure-observability')
+            );
+        }, 'admin.optin_notice'));
+    }
+
     private function registerUnconfiguredNotice(): void
     {
         if ($this->config->isManaged()) {

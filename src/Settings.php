@@ -21,9 +21,13 @@ final class Settings
      * can opt in to more, but nothing sensitive is transmitted because someone did not read the
      * settings page.
      *
+     * Public so the upgrade routine can materialise them into the options table. See Upgrade:
+     * a default that lives only in code silently rewrites the behaviour of every existing install
+     * the day it changes, which is exactly what v2.0.1 did.
+     *
      * @var array<string, mixed>
      */
-    private const DEFAULTS = [
+    public const DEFAULTS = [
         /*
          * ALL telemetry is OPT-IN. Nothing is transmitted until the site owner turns this on.
          *
@@ -91,7 +95,18 @@ final class Settings
 
         // An option that has never been written returns the default; an option written as an
         // empty string should still fall back for typed settings rather than becoming ''.
-        if ($value === '' && $default !== '') {
+        //
+        // Booleans are excluded, and that exclusion is load-bearing. An unchecked checkbox is
+        // saved as '', so coercing '' back to the default made every toggle whose default is true
+        // impossible to turn off: the user unchecked it, the value round-tripped to true, and
+        // renderToggle() drew the box ticked again. That silently affected anonymise_ip,
+        // track_admin and — worst — cookieless, whose whole documented purpose is to be turned off
+        // by an owner who wants session and returning-visitor aggregation.
+        //
+        // For a boolean, an option that has never been written never reaches here: get_option()
+        // returns the default itself, not ''. So '' can only mean "the user cleared this", and the
+        // honest reading is false.
+        if ($value === '' && $default !== '' && !is_bool($default)) {
             $value = $default;
         }
 

@@ -78,6 +78,39 @@ if (!function_exists('get_option')) {
     }
 }
 
+if (!function_exists('add_option')) {
+    /**
+     * Adds an option only when it does not already exist, and reports whether it did so.
+     * The "does not overwrite" half is the whole point at the call site, so the stub has to
+     * reproduce it rather than behave like update_option().
+     *
+     * @param mixed $value
+     */
+    function add_option(string $option, $value = ''): bool
+    {
+        if (array_key_exists($option, WPStubs::$options)) {
+            return false;
+        }
+
+        WPStubs::$options[$option] = $value;
+
+        return true;
+    }
+}
+
+if (!function_exists('delete_option')) {
+    function delete_option(string $option): bool
+    {
+        if (!array_key_exists($option, WPStubs::$options)) {
+            return false;
+        }
+
+        unset(WPStubs::$options[$option]);
+
+        return true;
+    }
+}
+
 if (!function_exists('update_option')) {
     /**
      * @param mixed $value
