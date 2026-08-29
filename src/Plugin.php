@@ -287,7 +287,8 @@ final class Plugin
             );
 
             printf(
-                '<div class="notice notice-warning"><p>%s</p><p><a href="%s" class="button button-primary">%s</a> <a href="%s">%s</a></p></div>',
+                '<div class="notice notice-warning"><p>%s</p>'
+                    . '<p><a href="%s" class="button button-primary">%s</a> <a href="%s">%s</a></p></div>',
                 esc_html__(
                     'KloudStack Observability for Azure now requires telemetry to be switched on explicitly, so it is currently off on this site. Earlier versions defaulted it on, which WordPress.org guidelines do not allow. Nothing is being collected until you enable it.',
                     'kloudstack-azure-observability'

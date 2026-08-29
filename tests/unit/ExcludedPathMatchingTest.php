@@ -20,7 +20,11 @@ final class ExcludedPathMatchingTest extends TestCase
     private static function match(string $pattern, string $target): bool
     {
         $method = new ReflectionMethod(RequestCollector::class, 'matchesUserPattern');
-        $method->setAccessible(true); // needed on PHP 7.4; a harmless no-op from 8.1
+        // Needed on PHP 7.4 and a no-op from 8.1, but deprecated from 8.5 — where the notice is
+        // emitted as unexpected output and PHPUnit marks the test risky.
+        if (PHP_VERSION_ID < 80100) {
+            $method->setAccessible(true);
+        }
 
         return (bool) $method->invoke(null, $pattern, $target);
     }

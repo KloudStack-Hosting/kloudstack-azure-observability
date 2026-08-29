@@ -44,7 +44,12 @@ final class SnippetInjectorTest extends TestCase
         // Tested through reflection rather than by widening the API: this is an internal rule about
         // when it is safe to emit, not a contract the plugin offers anyone.
         $method = new ReflectionMethod(SnippetInjector::class, 'correlationSurvivesCaching');
-        $method->setAccessible(true);
+
+        // Required on PHP 7.4, a no-op from 8.1, and deprecated from 8.5 — where the notice is
+        // emitted as unexpected output and PHPUnit fails the test outright.
+        if (PHP_VERSION_ID < 80100) {
+            $method->setAccessible(true);
+        }
 
         return (bool) $method->invoke(null);
     }
