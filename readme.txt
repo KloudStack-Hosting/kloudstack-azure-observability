@@ -4,7 +4,7 @@ Tags: application insights, azure, monitoring, observability, telemetry
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.0.7
+Stable tag: 2.0.8
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -137,6 +137,30 @@ manually in settings.
 
 == Changelog ==
 
+= 2.0.8 =
+* Settings no longer appear to reset when the plugin updates. Version 2.0.1 made all telemetry
+  opt-in, as WordPress.org requires. Settings are stored one option at a time, so a site that had
+  never pressed Save had nothing stored and was running on the defaults in the code -- and that
+  change turned telemetry off on every such site without saying so. Defaults are now written to
+  the database, so a future change of default cannot reach backwards, and where an update finds
+  telemetry off that nobody chose to turn off, a dismissible notice says so. Telemetry is never
+  switched back on for you.
+* Settings that default to on can be switched off again. An unchecked box saves as an empty
+  value, which was being read back as the default -- so "Cookie-less browser telemetry",
+  "Anonymise visitor IP addresses" and "Track admin requests" quietly refused to turn off and
+  redrew themselves ticked. Cookie-less was the costly one: turning it off is how you get session
+  and returning-visitor figures in Application Insights, and that was unreachable.
+* Browser telemetry no longer reports every visitor as one operation. The server's trace id was
+  written into the page, so any page cache stored it and served it to everyone -- one request's
+  id on thousands of unrelated page views. On a cached page PHP never runs, so there is no server
+  request to correlate with; the id is now sent only where PHP genuinely handled the request, and
+  the browser SDK generates its own everywhere else. This also restores correct sampling, which
+  Application Insights decides per operation id.
+* The Application Insights SDK no longer registers an unload handler that Chrome and Edge refuse
+  to run, which logged a console warning on every page view. Nothing is lost -- the SDK already
+  uses pagehide and beforeunload -- and pages become eligible for the browser's back/forward
+  cache.
+
 = 2.0.7 =
 * The Debug log setting now explains what it actually takes to get output. Turning it on does
   nothing by itself: WP_DEBUG and WP_DEBUG_LOG both have to be enabled in wp-config.php, and
@@ -183,6 +207,12 @@ manually in settings.
 * Initial public release.
 
 == Upgrade Notice ==
+
+= 2.0.8 =
+Two changes you will see. If this site has never had its telemetry settings saved, a notice will
+say telemetry is off -- it has been since 2.0.1, when WordPress.org required it to be opt-in, and
+this release tells you rather than leaving it silent. And "Cookie-less browser telemetry" can now
+actually be switched off, which is what enables Users and Sessions in Application Insights.
 
 = 2.0.7 =
 Wording only — the Debug log setting now names the wp-config.php lines needed for it to produce

@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format follows
 
 The telemetry schema is versioned independently — see the functional specification, section 8.
 
-## [Unreleased]
+## [2.0.8] - 2026-08-29
 
 ### Fixed
 - **Settings no longer appear to reset when the plugin updates.** v2.0.1 changed the telemetry
@@ -49,6 +49,17 @@ The telemetry schema is versioned independently — see the functional specifica
   violation on every page view while changing nothing. `disablePageUnloadEvents` now excludes it,
   which also makes pages eligible for the back/forward cache.
 
+- **The client snippet is delivered through the script API** rather than echoed as a raw
+  `<script>` tag, as WordPress.org requires. It is attached with `wp_add_inline_script()` to a
+  src-less registered handle — Microsoft's loader fetches the SDK itself, so enqueuing that URL
+  directly would load it twice. Any CSP nonce supplied through `kloudstack_obs_script_nonce` is
+  now applied via the `wp_script_attributes` filter. The rendered JavaScript is unchanged.
+- **The debug log no longer writes to the uploads root.** It now lives in
+  `uploads/kloudstack-azure-observability/`, created with `wp_mkdir_p()` and protected by
+  `.htaccess` and `index.php`. Previously it was written as
+  `uploads/kloudstack-obs-debug.log`, publicly fetchable at a guessable URL despite containing
+  request paths and error messages. Debug logging remains off by default.
+
 ### Changed
 - **Browser telemetry is now opt-in.** `client_enabled` defaults to `false`. Enabling it loads
   Microsoft's Application Insights JavaScript SDK into every visitor's browser, which
@@ -63,18 +74,6 @@ The telemetry schema is versioned independently — see the functional specifica
   "users" or "sessions" in the portal. Owners who need that can turn cookie-less mode off and
   take on the consent duty, ideally gating injection through the `kloudstack_obs_has_consent`
   filter from a consent management platform.
-
-### Fixed
-- **The client snippet is delivered through the script API** rather than echoed as a raw
-  `<script>` tag, as WordPress.org requires. It is attached with `wp_add_inline_script()` to a
-  src-less registered handle — Microsoft's loader fetches the SDK itself, so enqueuing that URL
-  directly would load it twice. Any CSP nonce supplied through `kloudstack_obs_script_nonce` is
-  now applied via the `wp_script_attributes` filter. The rendered JavaScript is unchanged.
-- **The debug log no longer writes to the uploads root.** It now lives in
-  `uploads/kloudstack-azure-observability/`, created with `wp_mkdir_p()` and protected by
-  `.htaccess` and `index.php`. Previously it was written as
-  `uploads/kloudstack-obs-debug.log`, publicly fetchable at a guessable URL despite containing
-  request paths and error messages. Debug logging remains off by default.
 
 ## [2.0.0-rc3]
 
