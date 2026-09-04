@@ -129,13 +129,20 @@ jobs:
             --exclude 'CHANGELOG.md' \
             --exclude 'CONTRIBUTING.md' \
             --exclude 'SECURITY.md' \
+            --exclude 'CLAUDE.md' \
             --exclude '.phpunit.result.cache' \
             --exclude '.phpcs-cache' \
             --exclude '*.zip' \
             --exclude '.DS_Store'
 
           # Fail loudly rather than shipping internal planning documents or dev tooling.
-          for forbidden in docs tests vendor legacy benchmark .github composer.json phpunit.xml; do
+          #
+          # CLAUDE.md is repo-owner-local and deliberately never committed, so it should never
+          # reach a runner checkout at all. It is listed here anyway because this rsync is a
+          # denylist — anything not excluded ships — and the hidden-file check below only catches
+          # dotfiles. A single `git add -A` would otherwise put internal notes into a WordPress.org
+          # release, where SVN keeps every published version permanently.
+          for forbidden in docs tests vendor legacy benchmark .github composer.json phpunit.xml CLAUDE.md; do
             if [ -e "build/${slug}/${forbidden}" ]; then
               echo "::error::${forbidden} must not be in the distributed package."
               exit 1
