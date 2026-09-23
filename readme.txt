@@ -219,6 +219,12 @@ manually in settings.
 
 == Upgrade Notice ==
 
+= 2.0.9 =
+Worth taking if you rely on the self-test. When Azure refuses your telemetry -- most often because
+the connection string names an Application Insights resource that no longer exists -- the plugin
+used to report "No recent failures" and suggest checking your outbound network access, while every
+item was being discarded. It now tells you the telemetry is being rejected, and what to check.
+
 = 2.0.8 =
 Two changes you will see. If this site has never had its telemetry settings saved, a notice will
 say telemetry is off -- it has been since 2.0.1, when WordPress.org required it to be opt-in, and
