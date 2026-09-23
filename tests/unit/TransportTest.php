@@ -205,6 +205,68 @@ final class TransportTest extends TestCase
         self::assertFalse($breaker->isOpen(), 'A malformed payload is our bug, not an outage.');
     }
 
+    public function testRejectionsAreRecordedRatherThanCountedAsSuccesses(): void
+    {
+        // Found on a live site: the app setting named an instrumentation key whose Application
+        // Insights resource no longer existed. Every item was rejected and discarded, and because
+        // a rejection cleared breaker state, diagnostics reported "No recent failures" throughout.
+        $breaker = new CircuitBreaker(1, 300);
+        $this->transport([['status' => 400]], $breaker)->send($this->items());
+
+        self::assertSame(1, $breaker->rejectionCount());
+        self::assertStringContainsString('HTTP 400', $breaker->lastRejectionReason());
+        self::assertStringContainsString('instrumentation key', $breaker->lastRejectionReason());
+    }
+
+    public function testRejectionReasonNamesTheLikelyCause(): void
+    {
+        // The status on its own sends people to check their firewall, which is the one thing that
+        // cannot be the cause when the endpoint answered.
+        $breaker = new CircuitBreaker(1, 300);
+        $this->transport([['status' => 403]], $breaker)->send($this->items());
+
+        self::assertStringContainsString('HTTP 403', $breaker->lastRejectionReason());
+        self::assertStringContainsString('local authentication', $breaker->lastRejectionReason());
+    }
+
+    public function testRejectionsAccumulateAndSurviveThePromptSuccessThatFollows(): void
+    {
+        // The bug in one line: a rejection ends with recordSuccess(), which clears the breaker's
+        // transient. Keeping the count on a separate key is what makes it visible at all.
+        $breaker = new CircuitBreaker(1, 300);
+        $transport = $this->transport([['status' => 400]], $breaker);
+
+        $transport->send($this->items());
+        $transport->send($this->items());
+
+        self::assertSame(2, $breaker->rejectionCount());
+        self::assertSame(0, $breaker->failureCount(), 'A rejection is not an outage.');
+    }
+
+    public function testAnAcceptedItemClearsRejections(): void
+    {
+        // Acceptance is the only evidence that whatever Azure was refusing has been put right.
+        $breaker   = new CircuitBreaker(1, 300);
+        $transport = $this->transport([['status' => 400], ['status' => 200]], $breaker);
+
+        $transport->send($this->items());
+        self::assertSame(1, $breaker->rejectionCount());
+
+        $transport->send($this->items());
+        self::assertSame(0, $breaker->rejectionCount());
+        self::assertSame('', $breaker->lastRejectionReason());
+    }
+
+    public function testServerErrorsAreNotRecordedAsRejections(): void
+    {
+        // A 503 is the endpoint being unwell, not refusing the payload. It belongs to the breaker.
+        $breaker = new CircuitBreaker(1, 300);
+        $this->transport([['status' => 503]], $breaker)->send($this->items());
+
+        self::assertSame(0, $breaker->rejectionCount());
+        self::assertTrue($breaker->isOpen());
+    }
+
     // ── Slowness classification ─────────────────────────────────────────────────────────────
     //
     // The gap these cover: before this, an endpoint answering successfully in three seconds was
@@ -380,10 +442,12 @@ final class TransportTest extends TestCase
     {
         $breaker = new CircuitBreaker(1, 300);
         $breaker->recordFailure('down');
+        $breaker->recordRejection('HTTP 400');
         $breaker->reset();
 
         self::assertFalse($breaker->isOpen());
         self::assertSame(0, $breaker->failureCount());
+        self::assertSame(0, $breaker->rejectionCount());
     }
 
     // ── Response release ────────────────────────────────────────────────────────────────────

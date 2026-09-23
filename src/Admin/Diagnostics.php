@@ -298,6 +298,26 @@ final class Diagnostics
         $slow     = $breaker->slowCount();
 
         if (!$breaker->isOpen()) {
+            // Checked before slowness and failures because it is the more severe condition: a
+            // rejected item is discarded outright, where a slow or intermittently failing endpoint
+            // still delivers. It reads as healthy from the breaker's point of view — the endpoint
+            // answered, promptly — so without this the check reports "No recent failures" while
+            // nothing whatsoever arrives in Azure.
+            if ($breaker->rejectionCount() > 0) {
+                return self::result(
+                    'circuit_breaker',
+                    'Transmission',
+                    self::STATUS_FAIL,
+                    sprintf(
+                        '%d recent item(s) rejected by Azure and discarded: %s. '
+                        . 'The endpoint is reachable, so this is a configuration problem rather than a '
+                        . 'network one.',
+                        $breaker->rejectionCount(),
+                        $breaker->lastRejectionReason()
+                    )
+                );
+            }
+
             if ($slow > 0) {
                 return self::result(
                     'circuit_breaker',
@@ -474,6 +494,10 @@ final class Diagnostics
         $breaker  = new CircuitBreaker(PHP_INT_MAX, 1, CircuitBreaker::TRANSIENT . '_selftest');
         $envelope = new Envelope($credentials['ikey'], 'php:kloudstack_' . \KloudStack\Observability\VERSION);
 
+        // Start from nothing, so what this run reports is what this run observed rather than what
+        // a previous test left behind.
+        $breaker->reset();
+
         $item = $envelope->build('Event', 'EventData', [
             'name'       => 'KloudStack Observability self-test',
             'properties' => [
@@ -503,11 +527,26 @@ final class Diagnostics
             );
         }
 
+        // Refused and unreachable are different problems with different fixes. Telling an
+        // administrator to check outbound HTTPS access when Azure answered and rejected the key
+        // sends them to inspect the one thing that demonstrably works.
+        $rejection = $breaker->lastRejectionReason();
+
+        if ($rejection !== '') {
+            return self::result(
+                'live',
+                'Test telemetry',
+                self::STATUS_FAIL,
+                'Rejected by Azure — ' . $rejection . '. The endpoint at ' . $credentials['endpoint']
+                . ' is reachable, so outbound access is not the problem.'
+            );
+        }
+
         return self::result(
             'live',
             'Test telemetry',
             self::STATUS_FAIL,
-            'Rejected or unreachable: ' . ($breaker->lastFailureReason() ?: 'the endpoint did not accept the item')
+            'Unreachable: ' . ($breaker->lastFailureReason() ?: 'the endpoint did not respond')
             . '. Check outbound HTTPS access to ' . $credentials['endpoint'] . '.'
         );
     }

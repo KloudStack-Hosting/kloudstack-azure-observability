@@ -4,6 +4,7 @@
 
 **Version:** 4.0
 **Date:** 20 July 2026
+**Last verified:** 2026-09-23
 **Supersedes:** v3.0 (July 2026)
 **Status:** Approved for implementation
 **Companion documents:**
@@ -469,7 +470,7 @@ The single most valuable support-cost reducer. One button, running:
 | Outbound connectivity | Ingestion endpoint reachable within timeout |
 | Test telemetry | A tagged test event accepted with HTTP 200 and an item count |
 | Transport | Response-release mechanism available; which one is in use |
-| Circuit breaker | Not tripped; last failure reason and time if it is |
+| Circuit breaker | Not tripped, and nothing rejected: an endpoint that answers and refuses every item looks healthy to the breaker, so a rejection is reported with its HTTP status rather than counted as a success |
 | Duplicate instrumentation | App Service AI extension not also active |
 | Client SDK | Injection enabled; consent gate state; cookie mode |
 | Load mode | `mu` or `standard`, with the fatal-coverage implication |

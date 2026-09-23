@@ -260,6 +260,43 @@ final class DiagnosticsTest extends TestCase
         self::assertStringContainsString('Could not resolve host', $check['message']);
     }
 
+    public function testLiveCheckDistinguishesRejectionFromUnreachability(): void
+    {
+        // The failure that prompted this: an app setting naming an instrumentation key whose
+        // resource no longer existed produced "Check outbound HTTPS access", sending the
+        // administrator to inspect the one thing that demonstrably worked.
+        putenv('APPLICATIONINSIGHTS_CONNECTION_STRING=' . self::VALID_CONNECTION);
+
+        $check = $this->find($this->diagnostics(['status' => 400])->run(true), 'live');
+
+        self::assertSame(Diagnostics::STATUS_FAIL, $check['status']);
+        self::assertStringContainsString('HTTP 400', $check['message'], 'Must name the status.');
+        self::assertStringContainsString('instrumentation key', $check['message']);
+        self::assertStringNotContainsString(
+            'Check outbound HTTPS access',
+            $check['message'],
+            'The endpoint answered, so egress cannot be the cause.'
+        );
+    }
+
+    public function testTransmissionDoesNotPassWhileItemsAreBeingRejected(): void
+    {
+        // A rejection looks healthy to the breaker — the endpoint answered, promptly — so this
+        // check reported "No recent failures" on a site where nothing reached Azure at all.
+        putenv('APPLICATIONINSIGHTS_CONNECTION_STRING=' . self::VALID_CONNECTION);
+
+        WPStubs::$transients['kloudstack_obs_breaker_rejected'] = [
+            'count'  => 4,
+            'reason' => 'HTTP 400: the instrumentation key or the payload was rejected',
+        ];
+
+        $check = $this->find($this->diagnostics()->run(false), 'circuit_breaker');
+
+        self::assertSame(Diagnostics::STATUS_FAIL, $check['status']);
+        self::assertStringContainsString('4 recent item(s) rejected', $check['message']);
+        self::assertStringContainsString('HTTP 400', $check['message']);
+    }
+
     public function testLiveCheckDoesNotTripTheProductionBreaker(): void
     {
         // A failing self-test must not suspend the site's real telemetry.
@@ -272,6 +309,18 @@ final class DiagnosticsTest extends TestCase
             WPStubs::$transients,
             'The self-test must use its own breaker.'
         );
+    }
+
+    public function testARejectedSelfTestDoesNotShowUpAsAProductionRejection(): void
+    {
+        // Rejections are recorded on a key derived from the breaker's, so the isolation the
+        // self-test already has must extend to them.
+        putenv('APPLICATIONINSIGHTS_CONNECTION_STRING=' . self::VALID_CONNECTION);
+
+        $this->diagnostics(['status' => 400])->run(true);
+
+        self::assertArrayNotHasKey('kloudstack_obs_breaker_rejected', WPStubs::$transients);
+        self::assertArrayHasKey('kloudstack_obs_breaker_selftest_rejected', WPStubs::$transients);
     }
 
     // ── Reporting ───────────────────────────────────────────────────────────────────────────

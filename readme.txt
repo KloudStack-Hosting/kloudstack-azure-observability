@@ -4,7 +4,7 @@ Tags: application insights, azure, monitoring, observability, telemetry
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.0.8
+Stable tag: 2.0.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -136,6 +136,17 @@ manually in settings.
 2. The built-in diagnostics self-test — checks configuration, the Azure environment, outbound connectivity and a live round-trip to Azure through the real transport path, with a copy-paste report for support.
 
 == Changelog ==
+
+= 2.0.9 =
+* The self-test no longer says everything is fine when Azure is throwing your telemetry away. If
+  the connection string names an Application Insights resource that no longer exists, the endpoint
+  answers and refuses each item -- and that refusal was being recorded as a successful send, so
+  "Transmission" reported no recent failures while nothing whatsoever arrived. Refused items are
+  now counted and reported with the HTTP status Azure returned.
+* A refused item is no longer described as an unreachable endpoint. The test telemetry failure
+  said "Rejected or unreachable" and told you to check outbound HTTPS access, which cannot be the
+  cause when Azure answered. It now says which it was, and a refusal points you at the connection
+  string instead of your firewall.
 
 = 2.0.8 =
 * Settings no longer appear to reset when the plugin updates. Version 2.0.1 made all telemetry

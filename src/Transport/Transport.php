@@ -117,6 +117,7 @@ final class Transport
         // Accepted, including 206 partial success. The duration decides whether this counts as a
         // clean success or as a degradation signal — a 200 that took three seconds is not healthy.
         if ($status >= 200 && $status < 300) {
+            $this->breaker->clearRejections();
             $this->breaker->recordSuccess($durationMs);
 
             return true;
@@ -136,15 +137,53 @@ final class Transport
             return false;
         }
 
-        // 4xx other than 429: our payload is wrong. Log it, do not trip the breaker.
+        // 4xx other than 429: the endpoint answered and refused the payload. Log it, record why,
+        // do not trip the breaker — retrying cannot fix a rejection, and suspending all telemetry
+        // over one bad item would be a far worse outcome.
+        //
+        // The rejection is recorded separately from the breaker because the endpoint is reachable
+        // and prompt, which is what recordSuccess() below says. Without it, "the key is wrong" and
+        // "everything is fine" are indistinguishable in diagnostics: both report no failures while
+        // one of them means nothing reaches Azure at all.
+        $reason = 'HTTP ' . $status . ': ' . self::rejectionMeaning($status);
+
         Log::warning('Telemetry rejected by the ingestion endpoint.', [
             'status' => $status,
             'items'  => $itemCount,
+            'reason' => $reason,
         ]);
 
+        $this->breaker->recordRejection($reason);
         $this->breaker->recordSuccess($durationMs);
 
         return false;
+    }
+
+    /**
+     * What a rejection status means for an Application Insights administrator.
+     *
+     * The status alone sends people to check their firewall, which is the one thing that cannot be
+     * the cause — the endpoint answered. These are the refusals ingestion actually returns.
+     */
+    private static function rejectionMeaning(int $status): string
+    {
+        switch ($status) {
+            case 400:
+                return 'the instrumentation key or the payload was rejected. '
+                    . 'Check that the key in the connection string belongs to an Application Insights '
+                    . 'resource that still exists';
+            case 401:
+            case 403:
+                return 'ingestion refused the credentials. '
+                    . 'Check the instrumentation key, and whether local authentication or public network '
+                    . 'access has been disabled on the Application Insights resource';
+            case 404:
+                return 'the ingestion endpoint was not found. Check the connection string';
+            case 413:
+                return 'the payload was too large for the endpoint to accept';
+            default:
+                return 'the endpoint refused the payload';
+        }
     }
 
     /**

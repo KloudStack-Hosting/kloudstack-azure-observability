@@ -272,6 +272,79 @@ final class CircuitBreaker
     }
 
     /**
+     * Record a send the endpoint answered but refused.
+     *
+     * A rejection is not a breaker failure: the endpoint is reachable and prompt, and resending a
+     * payload it will not accept would suspend all telemetry over something retrying cannot fix.
+     * It is not a success either, though, and recording it as one is how a site whose
+     * instrumentation key no longer exists came to report "No recent failures" while every item
+     * was being discarded.
+     *
+     * Kept on its own transient because a prompt success clears the breaker's, which would erase
+     * the reason the telemetry never arrived.
+     */
+    public function recordRejection(string $reason): void
+    {
+        $stored = get_transient($this->rejectionKey());
+        $count  = is_array($stored) ? (int) ($stored['count'] ?? 0) : 0;
+
+        set_transient(
+            $this->rejectionKey(),
+            [
+                'count'  => $count + 1,
+                'reason' => $reason,
+            ],
+            $this->openSeconds
+        );
+    }
+
+    /**
+     * Forget recorded rejections.
+     *
+     * An accepted item is the only evidence that whatever the endpoint was refusing has been put
+     * right, so acceptance is what clears them.
+     */
+    public function clearRejections(): void
+    {
+        if (get_transient($this->rejectionKey()) !== false) {
+            delete_transient($this->rejectionKey());
+        }
+    }
+
+    /**
+     * Recent sends the endpoint answered and refused.
+     */
+    public function rejectionCount(): int
+    {
+        $stored = get_transient($this->rejectionKey());
+
+        return is_array($stored) ? (int) ($stored['count'] ?? 0) : 0;
+    }
+
+    /**
+     * Why the endpoint last refused an item — the HTTP status and what it usually means.
+     */
+    public function lastRejectionReason(): string
+    {
+        $stored = get_transient($this->rejectionKey());
+
+        if (!is_array($stored)) {
+            return '';
+        }
+
+        return is_string($stored['reason'] ?? null) ? $stored['reason'] : '';
+    }
+
+    /**
+     * Derived from the breaker key so the diagnostics self-test, which already runs on its own
+     * key, keeps its own rejection state too.
+     */
+    private function rejectionKey(): string
+    {
+        return $this->key . '_rejected';
+    }
+
+    /**
      * Why the breaker last failed. Surfaced in diagnostics so an administrator sees the actual
      * error rather than only that telemetry stopped.
      */
@@ -299,6 +372,7 @@ final class CircuitBreaker
     public function reset(): void
     {
         delete_transient($this->key);
+        delete_transient($this->rejectionKey());
     }
 
     /**

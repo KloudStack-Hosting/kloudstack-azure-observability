@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 The telemetry schema is versioned independently — see the functional specification, section 8.
 
+## [2.0.9] - 2026-09-23
+
+### Fixed
+- **Diagnostics no longer report a healthy site when Azure is discarding every item.** When the
+  ingestion endpoint answers with a 4xx — the usual cause being an instrumentation key whose
+  Application Insights resource no longer exists — the payload is refused and dropped. Retrying
+  cannot fix that, so it must not open the circuit breaker; but it was being recorded as a
+  *success*, which cleared the breaker's state along with any evidence of what had happened. The
+  Transmission check consequently reported "No recent failures" on a site where nothing at all was
+  reaching Azure. Rejections are now counted separately, and the check fails while items are being
+  refused, naming the status and what it means.
+- **A refused item is no longer reported as an unreachable endpoint.** The self-test's failure
+  message said "Rejected or unreachable" and advised checking outbound HTTPS access, which is the
+  one explanation ruled out by the endpoint having answered. Refusal and unreachability are now
+  reported separately: a rejection names the HTTP status and points at the connection string, and
+  only a genuine transport failure suggests checking egress.
+
 ## [2.0.8] - 2026-08-29
 
 ### Fixed
