@@ -4,7 +4,7 @@ Tags: application insights, azure, monitoring, observability, telemetry
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.0.9
+Stable tag: 2.0.10
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -137,6 +137,18 @@ manually in settings.
 
 == Changelog ==
 
+= 2.0.10 =
+* Telemetry can no longer stay suspended indefinitely. When sends to Azure are slow or failing,
+  the plugin pauses them for five minutes so they cannot tie up your PHP workers. Ending that pause
+  relied on WordPress expiring a stored value, and on one site the value outlived its expiry record
+  -- so WordPress kept it for good, and telemetry stayed off for two days while the self-test kept
+  promising it would resume "within five minutes". The pause now carries its own end time, and
+  a pause already stuck this way clears itself when you install this update.
+* The self-test now says what time transmission resumes, rather than "within five minutes".
+* A Reset transmission button appears under Diagnostics while transmission is paused, so you can
+  resume it straight away.
+* Uninstalling now removes every temporary value the plugin stores. Four were being left behind.
+
 = 2.0.9 =
 * The self-test no longer says everything is fine when Azure is throwing your telemetry away. If
   the connection string names an Application Insights resource that no longer exists, the endpoint
@@ -218,6 +230,11 @@ manually in settings.
 * Initial public release.
 
 == Upgrade Notice ==
+
+= 2.0.10 =
+Recommended for everyone. Fixes telemetry that could stay suspended indefinitely after a short
+spell of slow sends to Azure. If your self-test shows "Transmission: Suspended" and no data has
+arrived for longer than a few minutes, this update clears it.
 
 = 2.0.9 =
 Worth taking if you rely on the self-test. When Azure refuses your telemetry -- most often because

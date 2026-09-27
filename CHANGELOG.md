@@ -6,6 +6,30 @@ All notable changes to this project are documented here. The format follows
 
 The telemetry schema is versioned independently — see the functional specification, section 8.
 
+## [2.0.10] - 2026-09-27
+
+### Fixed
+- **The circuit breaker can no longer stay open indefinitely.** It writes nothing while open, so
+  closing again depended entirely on its transient expiring. On a live site the `wp_options` row
+  outlived its `_transient_timeout_` companion — WordPress treats a transient with no timeout row
+  as permanent — and telemetry stayed suspended for two days. Purging the object cache and
+  restarting the container changed nothing, because the row was in the database. The breaker now
+  stores its own deadline (`until`) inside the value and treats state past it, or state with no
+  deadline at all, as lapsed. That last case is what releases a site already stuck on an earlier
+  version: the stale row is deleted on the first read after upgrading.
+- **Diagnostics state when transmission resumes.** "Resumes automatically within five minutes" was
+  printed unchanged for the whole two days. The Transmission check now gives the UTC time the
+  suspension ends.
+- **`uninstall.php` removes the transients the plugin actually writes.** It deleted
+  `kloudstack_obs_diagnostics`, which nothing writes, and left `kloudstack_obs_selftest_result`,
+  `kloudstack_obs_breaker_rejected`, `kloudstack_obs_breaker_selftest` and
+  `kloudstack_obs_breaker_selftest_rejected` behind.
+
+### Added
+- **Reset transmission.** Shown under Diagnostics only while transmission is suspended; clears the
+  production breaker (capability- and nonce-checked). Previously nothing on the page could end a
+  suspension, and the self-test's breaker is deliberately separate, so re-running it did not help.
+
 ## [2.0.9] - 2026-09-23
 
 ### Fixed
