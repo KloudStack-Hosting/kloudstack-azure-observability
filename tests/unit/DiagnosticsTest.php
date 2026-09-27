@@ -297,6 +297,33 @@ final class DiagnosticsTest extends TestCase
         self::assertStringContainsString('HTTP 400', $check['message']);
     }
 
+    public function testASuspensionNamesTheTimeItEnds(): void
+    {
+        // "Resumes automatically within five minutes" was printed unchanged for two days on a site
+        // whose breaker state never lapsed. A clock time exposes that; a relative promise hid it.
+        putenv('APPLICATIONINSIGHTS_CONNECTION_STRING=' . self::VALID_CONNECTION);
+
+        $until = time() + 240;
+
+        WPStubs::$transients['kloudstack_obs_breaker'] = [
+            'failures'  => 0,
+            'slow'      => 3,
+            'since'     => time() - 60,
+            'sustained' => false,
+            'reason'    => 'slow endpoint: 1176 ms',
+            'until'     => $until,
+        ];
+
+        $check = $this->find($this->diagnostics()->run(false), 'circuit_breaker');
+
+        self::assertSame(Diagnostics::STATUS_FAIL, $check['status']);
+        self::assertStringContainsString(
+            'resumes automatically at ' . gmdate('H:i', $until) . ' UTC',
+            $check['message']
+        );
+        self::assertStringNotContainsString('within five minutes', $check['message']);
+    }
+
     public function testLiveCheckDoesNotTripTheProductionBreaker(): void
     {
         // A failing self-test must not suspend the site's real telemetry.

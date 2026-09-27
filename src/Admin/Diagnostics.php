@@ -350,13 +350,16 @@ final class Diagnostics
             ? 'the ingestion endpoint is responding too slowly, which ties up PHP workers'
             : 'the ingestion endpoint could not be reached repeatedly';
 
+        // A time rather than "within five minutes": the promise was printed unchanged for two days
+        // on a site whose breaker state never lapsed, and a clock time makes that visible.
         return self::result(
             'circuit_breaker',
             'Transmission',
             self::STATUS_FAIL,
             'Suspended: ' . $cause . '. Last reason: '
             . ($breaker->lastFailureReason() ?: 'unknown')
-            . '. Transmission resumes automatically within five minutes of the endpoint recovering.'
+            . '. Transmission resumes automatically at ' . gmdate('H:i', $breaker->resumesAt())
+            . ' UTC, and is suspended again if the endpoint is still failing then.'
         );
     }
 

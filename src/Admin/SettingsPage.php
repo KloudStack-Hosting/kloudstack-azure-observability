@@ -9,6 +9,7 @@ use KloudStack\Observability\Plugin;
 use KloudStack\Observability\Settings;
 use KloudStack\Observability\Support\Guard;
 use KloudStack\Observability\Telemetry\Privacy;
+use KloudStack\Observability\Transport\CircuitBreaker;
 use KloudStack\Observability\Upgrade;
 
 use const KloudStack\Observability\PREFIX;
@@ -53,6 +54,10 @@ final class SettingsPage
         add_action('admin_menu', Guard::wrap([$this, 'addPage'], 'admin.menu'));
         add_action('admin_post_kloudstack_obs_save', Guard::wrap([$this, 'handleSave'], 'admin.save'));
         add_action('admin_post_kloudstack_obs_selftest', Guard::wrap([$this, 'handleSelfTest'], 'admin.selftest'));
+        add_action(
+            'admin_post_kloudstack_obs_reset_breaker',
+            Guard::wrap([$this, 'handleResetBreaker'], 'admin.reset_breaker')
+        );
     }
 
     public function addPage(): void
@@ -193,6 +198,30 @@ final class SettingsPage
         exit;
     }
 
+    /**
+     * Clear suspended transmission on demand.
+     *
+     * Before this, diagnostics could report a suspension but nothing on the page could end one,
+     * and the self-test's own breaker is deliberately separate, so running it changed nothing.
+     */
+    public function handleResetBreaker(): void
+    {
+        if (!current_user_can(self::CAPABILITY)) {
+            wp_die(esc_html__('You do not have permission to reset transmission.', 'kloudstack-azure-observability'));
+        }
+
+        check_admin_referer(self::NONCE);
+
+        (new CircuitBreaker())->reset();
+
+        // The stored self-test result still says "Suspended", and showing it beside a notice
+        // saying transmission was reset would contradict itself.
+        delete_transient(PREFIX . 'selftest_result');
+
+        wp_safe_redirect(add_query_arg('kloudstack_obs_reset', '1', self::pageUrl()));
+        exit;
+    }
+
     public function render(): void
     {
         if (!current_user_can(self::CAPABILITY)) {
@@ -284,6 +313,16 @@ final class SettingsPage
         if (isset($_GET['kloudstack_obs_saved'])) {
             echo '<div class="notice notice-success is-dismissible"><p>'
                 . esc_html__('Settings saved.', 'kloudstack-azure-observability')
+                . '</p></div>';
+        }
+
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only display flag: isset() only, the value is never read or used to process data.
+        if (isset($_GET['kloudstack_obs_reset'])) {
+            echo '<div class="notice notice-success is-dismissible"><p>'
+                . esc_html__(
+                    'Transmission reset. Telemetry is sent again from the next request.',
+                    'kloudstack-azure-observability'
+                )
                 . '</p></div>';
         }
 
@@ -406,6 +445,21 @@ final class SettingsPage
         echo '<input type="hidden" name="action" value="kloudstack_obs_selftest" />';
         wp_nonce_field(self::NONCE);
         submit_button(__('Run self-test', 'kloudstack-azure-observability'), 'secondary', 'submit', false);
+        echo '</form>';
+
+        // Only offered while there is something to reset.
+        if (!(new CircuitBreaker())->isOpen()) {
+            return;
+        }
+
+        echo '<p>' . esc_html__(
+            'Transmission is suspended. Reset it to resume sending now, rather than waiting for it to lapse.',
+            'kloudstack-azure-observability'
+        ) . '</p>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+        echo '<input type="hidden" name="action" value="kloudstack_obs_reset_breaker" />';
+        wp_nonce_field(self::NONCE);
+        submit_button(__('Reset transmission', 'kloudstack-azure-observability'), 'secondary', 'submit', false);
         echo '</form>';
     }
 

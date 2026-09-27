@@ -1,5 +1,7 @@
 # Backlog
 
+**Last verified:** 2026-09-27
+
 Known work, not urgent. Each entry says what is wrong, why it matters, and what "done" looks like,
 so it can be picked up without reconstructing the reasoning.
 
@@ -84,3 +86,26 @@ Fixed in 2.0.8 by guarding the call on `PHP_VERSION_ID`, but the matrix would no
 
 **Done looks like:** `8.5` added to the matrix in `ci.yml`. Expect it to surface other deprecations;
 that is the point.
+
+---
+
+## 4. The one-second slow-send threshold trips on healthy sites
+
+**Found 2026-09-27.** `CircuitBreaker::SLOW_MS` is 1000. Two sites on App Service tripped the breaker
+on real sends of 1,176 ms and 1,639 ms, while the same endpoint answered the self-test in 119–247 ms.
+Each trip suspends telemetry for five minutes, so a site that crosses the line a few times a day loses
+data it never reports losing.
+
+The likely cause is connection set-up: every PHP request opens a fresh TLS connection to the
+ingestion endpoint, and an occasional cold DNS lookup or SNAT allocation on App Service costs about a
+second. The self-test is fast because it is a single warm request. **That is a hypothesis, not a
+measurement.**
+
+**Do not just raise the number.** The threshold exists because slow-but-successful sends measurably
+held PHP workers (`C4-LATENCY-GATE-RESULT.md`); loosening it without data trades one invisible
+problem for another.
+
+**Done looks like:** send durations recorded for a week on at least two sites (the breaker already
+times every send in `Transport`), the distribution compared against the threshold, and either a
+threshold that the healthy tail does not cross, or a rule that a single slow send after a quiet
+period does not count as a strike.

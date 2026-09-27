@@ -112,9 +112,8 @@ final class CircuitBreaker
     /**
      * Current breaker state.
      *
-     * The transient's own expiry provides the open-to-half-open transition: once it lapses there
-     * is no stored state, so the next request probes naturally. No timestamp arithmetic and no
-     * scheduled task.
+     * Lapsed state reads as no state (see stored()), which provides the open-to-half-open
+     * transition: the next request probes naturally, with no scheduled task.
      */
     public function state(): string
     {
@@ -234,6 +233,7 @@ final class CircuitBreaker
                 'since'     => $since,
                 'sustained' => $sustained,
                 'reason'    => $reason,
+                'until'     => $now + $this->openSeconds,
             ],
             $this->openSeconds
         );
@@ -376,12 +376,36 @@ final class CircuitBreaker
     }
 
     /**
+     * When transmission resumes, as a Unix timestamp, or 0 when nothing is stored.
+     */
+    public function resumesAt(): int
+    {
+        return (int) ($this->stored()['until'] ?? 0);
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
     private function stored(): ?array
     {
         $stored = get_transient($this->key);
 
-        return is_array($stored) ? $stored : null;
+        if (!is_array($stored)) {
+            return null;
+        }
+
+        // The breaker writes nothing while it is open, so it relies on its state lapsing to
+        // close again. The transient's own expiry cannot be trusted with that: found on a live
+        // site where the database row outlived its _transient_timeout_ companion, so WordPress
+        // treated it as permanent and telemetry stayed suspended for two days. The deadline
+        // travels inside the value instead. State written before it existed has no deadline and
+        // is treated as lapsed, which is also what releases a site already stuck that way.
+        if ((int) ($stored['until'] ?? 0) <= time()) {
+            delete_transient($this->key);
+
+            return null;
+        }
+
+        return $stored;
     }
 }

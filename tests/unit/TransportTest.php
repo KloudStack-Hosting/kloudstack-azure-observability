@@ -438,6 +438,48 @@ final class TransportTest extends TestCase
         self::assertTrue((new CircuitBreaker(1, 300))->isOpen());
     }
 
+    public function testStateWithNoDeadlineIsTreatedAsLapsed(): void
+    {
+        // Copied from a live site's database. The row had lost its _transient_timeout_ companion,
+        // so WordPress returned it for ever and telemetry stayed suspended for two days. State
+        // written before the deadline existed must release itself rather than stay stuck.
+        WPStubs::$transients[CircuitBreaker::TRANSIENT] = [
+            'failures'  => 0,
+            'slow'      => 3,
+            'since'     => 1790349429,
+            'sustained' => false,
+            'reason'    => 'slow endpoint: 1176 ms',
+        ];
+
+        $breaker = new CircuitBreaker();
+
+        self::assertSame(CircuitBreaker::STATE_CLOSED, $breaker->state());
+        self::assertTrue($breaker->allowsRequest());
+        self::assertArrayNotHasKey(CircuitBreaker::TRANSIENT, WPStubs::$transients, 'Lapsed state must be removed.');
+    }
+
+    public function testAnOpenBreakerClosesAtItsOwnDeadlineEvenWhenStorageNeverExpires(): void
+    {
+        // The stubbed set_transient() ignores expiry, which is exactly the live failure: storage
+        // that keeps the value indefinitely. Closing must not depend on it.
+        $breaker = new CircuitBreaker(1, 300);
+        $breaker->recordFailure('down');
+        self::assertTrue($breaker->isOpen());
+
+        WPStubs::$transients[CircuitBreaker::TRANSIENT]['until'] = time() - 1;
+
+        self::assertFalse($breaker->isOpen(), 'Past its deadline the breaker must close.');
+        self::assertSame(0, $breaker->failureCount());
+    }
+
+    public function testAnOpenBreakerReportsWhenItResumes(): void
+    {
+        $breaker = new CircuitBreaker(1, 300);
+        $breaker->recordFailure('down');
+
+        self::assertEqualsWithDelta(time() + 300, $breaker->resumesAt(), 2);
+    }
+
     public function testBreakerResetClearsState(): void
     {
         $breaker = new CircuitBreaker(1, 300);

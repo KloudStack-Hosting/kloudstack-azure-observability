@@ -49,5 +49,16 @@ foreach ($kloudstack_obs_options as $kloudstack_obs_option) {
     }
 }
 
-delete_transient('kloudstack_obs_breaker');
-delete_transient('kloudstack_obs_diagnostics');
+// 'kloudstack_obs_diagnostics' was deleted here but is never written; the transients below are the
+// ones the plugin actually creates.
+foreach (
+    array(
+        'kloudstack_obs_breaker',
+        'kloudstack_obs_breaker_rejected',
+        'kloudstack_obs_breaker_selftest',
+        'kloudstack_obs_breaker_selftest_rejected',
+        'kloudstack_obs_selftest_result',
+    ) as $kloudstack_obs_transient
+) {
+    delete_transient($kloudstack_obs_transient);
+}
